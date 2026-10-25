@@ -130,6 +130,8 @@ static void load_palette(void) {
 
 static void screen_off(void) { PPUMASK = 0; }
 static void screen_on(void) {
+    /* Both pattern tables are at $0000.  Set the scroll latch while the
+       display is still off so the first visible frame is the finished one. */
     PPUCTRL = 0; cam = 0;
     ppu_addr(0x2000);
     PPUSCROLL = 0; PPUSCROLL = 0;
@@ -211,6 +213,9 @@ static void title_screen(void) {
     static const unsigned char meme[4] = { 0, 1, 0, 1 };
     static const unsigned char blitz[5] = { 2, 3, 4, 5, 6 };
     screen_off();
+    /* Tile zero uses the universal background colour ($0F: black).  Filling
+       the whole name table first guarantees that the title never exposes the
+       emulator's power-on grey while the logo is being drawn. */
     fill_nt(0x2000, 0, 0xFF);
     fill_nt(0x2400, 0, 0);
     load_palette();
@@ -565,6 +570,7 @@ static unsigned char play_level(void) {
 
 void main(void) {
     PPUCTRL = 0; PPUMASK = 0;
+    /* Let the PPU finish power-on before touching its address/data ports. */
     wait_vblank(); wait_vblank();
     oam_n = 0;
     for (;;) {
