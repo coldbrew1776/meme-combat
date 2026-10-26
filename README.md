@@ -4,7 +4,7 @@ A Contra-style NES run-and-gun written in C (cc65). Level 1 is **Meme Zone**: on
 meme soldiers run right, shoot enemies, grab power-ups (shoot the floating capsule, then
 touch the dropped letter: S = spread, R = rapid fire) and beat the boss, which has hit points.
 
-Controls: D-pad move (down = lie down), B jump, A shoot, Select toggles 1/2 players on the
+Controls: D-pad move (down = lie down), A jump, B shoot, Select toggles 1/2 players on the
 title screen, and Start begins, pauses, or resumes a game.
 
 ## Build and run

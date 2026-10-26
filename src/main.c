@@ -53,6 +53,7 @@
 #define T_MOUNTAIN 0x5E
 #define T_PINE 0x5F
 #define T_LOGO 0x60
+#define T_BIG 0xA0          /* 16x16 glyphs, see BIG_SET in tools/gen_chr.py */
 
 #define GROUND 192          /* y of the players' feet */
 #define LEVEL_END 1800      /* camera stops here and the boss arrives */
@@ -90,7 +91,8 @@ static unsigned char spawn_t;
 static unsigned char boss_on, boss_hp, boss_flash, boss_shot, boss_dying;
 static int boss_x;
 static unsigned int score;
-static unsigned char level_number = 1, shot_sound;
+static unsigned char level_number = 1, shot_sound, death_sound;
+static const char big_set[] = "LEVM1ZON";
 static const int pu_world_x[NUM_PU] = { 520, 1150 };
 static unsigned char pu_state[NUM_PU], pu_y[NUM_PU];
 
@@ -238,7 +240,7 @@ static void sound_start(void) {
     APU_P1 = 0x43;                 /* 25% duty, short decaying pluck */
     APU_P2 = 0x7F;
     APU_TRI = 0xC0;
-    shot_sound = 0;
+    shot_sound = 0; death_sound = 0;
 }
 
 /* Bullet: a noise crack plus a fast falling "pew" on pulse 2. */
@@ -250,6 +252,15 @@ static void sound_shoot(void) {
     APU_P2LO = 0x30;
     APU_P2HI = 0x08;
     shot_sound = 8;
+}
+
+/* Sad descending wail on pulse 2 that fades out. */
+static void sound_death(void) {
+    shot_sound = 0;
+    death_sound = 48;
+    APU_P2 = 0xBF;
+    APU_P2LO = 0xA0;
+    APU_P2HI = 0x08;
 }
 
 static void sound_update(void) {
@@ -264,7 +275,13 @@ static void sound_update(void) {
         note = music_bass[chord];
         APU_TRILO = note & 0xFF; APU_TRIHI = (note >> 8) & 7;
     }
-    if (shot_sound) {
+    if (death_sound) {
+        unsigned char t = 48 - death_sound;
+        unsigned int period = 0xA0 + t * 6;
+        APU_P2 = 0xB0 | (15 - t / 4);
+        APU_P2LO = period & 0xFF;
+        if (--death_sound == 0) APU_P2 = 0x30;
+    } else if (shot_sound) {
         APU_P2LO = 0x30 + (8 - shot_sound) * 0x18;
         if (--shot_sound == 0) APU_P2 = 0x30;
     }
@@ -342,12 +359,31 @@ static void title_screen(void) {
     title_anim = 0;
 }
 
-static void message_screen(const char *l1, const char *l2, unsigned char frames) {
+/* Centered text from 16x16 glyphs (letters in big_set only). */
+static void put_big(const char *s, unsigned char row) {
+    unsigned char col = 16 - (unsigned char)strlen(s), n, r, k;
+    const char *q;
+    for (r = 0; r < 2; ++r) {
+        ppu_addr(0x2000 + (unsigned int)(row + r) * 32 + col);
+        for (q = s; *q; ++q) {
+            n = 0;
+            for (k = 0; big_set[k]; ++k) if (big_set[k] == *q) n = T_BIG + k * 4 + r * 2;
+            PPUDATA = n; PPUDATA = n ? n + 1 : 0;
+        }
+    }
+}
+
+static void message_screen(const char *l1, const char *l2, unsigned char frames, unsigned char big) {
     screen_off();
     fill_nt(0x2000, 0, 0);
     load_palette();
-    put_text(16 - (unsigned char)strlen(l1) / 2, 11, l1);
-    put_text(16 - (unsigned char)strlen(l2) / 2, 14, l2);
+    if (big) {
+        put_big(l1, 9);
+        put_big(l2, 14);
+    } else {
+        put_text(16 - (unsigned char)strlen(l1) / 2, 11, l1);
+        put_text(16 - (unsigned char)strlen(l2) / 2, 14, l2);
+    }
     screen_on();
     while (frames--) present();
 }
@@ -414,7 +450,7 @@ static void fire_bullet(Player *p, signed char dx, signed char dy) {
         pb_y[i] = p->lie ? p->y - 6 : p->y - 15;
         pb_dx[i] = p->face ? -dx : dx;
         pb_dy[i] = dy;
-        sound_shoot();
+        if (!death_sound) sound_shoot();
         return;
     }
 }
@@ -438,6 +474,7 @@ static void player_shoot(Player *p, unsigned char btn_pressed, unsigned char btn
 static void kill_player(Player *p) {
     if (p->inv) return;
     p->state = 2; p->timer = 70; p->wpn = 0;
+    sound_death();
     if (p->lives) --p->lives;
 }
 
@@ -460,17 +497,17 @@ static void update_player(unsigned char i) {
     if (!p->lie) {
         if (pd & BTN_LEFT) { p->x -= 2; p->face = 1; ++p->step; }
         else if (pd & BTN_RIGHT) { p->x += 2; p->face = 0; ++p->step; }
-        if (ground && (pressed[i] & BTN_B)) p->vy = -8;
+        if (ground && (pressed[i] & BTN_A)) p->vy = -10;
     }
     if (p->x < cam) p->x = cam;
     if (p->x > cam + 232) p->x = cam + 232;
-    /* jump physics: gravity every other frame */
+    /* jump physics: strong gravity applied every frame for a smooth arc */
     if (p->y < GROUND || p->vy < 0) {
         p->y += p->vy;
-        if (frame & 1) { if (p->vy < 8) ++p->vy; }
+        if (p->vy < 10) ++p->vy;
         if (p->y >= GROUND && p->vy >= 0) { p->y = GROUND; p->vy = 0; }
     }
-    player_shoot(p, pressed[i] & BTN_A, pd & BTN_A);
+    player_shoot(p, pressed[i] & BTN_B, pd & BTN_B);
 }
 
 static void update_camera(void) {
@@ -595,6 +632,17 @@ static void draw_all(void) {
     int sx;
     for (i = 0; i < 2; ++i) {
         Player *p = &pl[i];
+        if (p->state == 2 && p->timer > 6 && (p->timer > 24 || (p->timer & 2))) {
+            /* death: tumble up, fall, then lie flat and blink out */
+            unsigned char t = 70 - p->timer, c;
+            int dy = (t < 24) ? (int)t * (24 - t) / 8 : 0;
+            unsigned char fl = (t < 24) ? 0x80 : 0;
+            sx = p->x - cam;
+            for (c = 0; c < 3; ++c)
+                add_spr(sx + c * 8, p->y - 8 - dy, T_LIE + (p->face ? 2 - c : c),
+                        i | fl | (p->face ? 0x40 : 0));
+            continue;
+        }
         if (p->state != 1 || (p->inv & 2)) continue;
         sx = p->x - cam;
         if (p->lie) {
@@ -675,7 +723,7 @@ static void pause_game(void) {
 /* returns 1 if the level was cleared, 0 on game over */
 static unsigned char play_level(void) {
     unsigned char i;
-    message_screen("LEVEL 1", "MEME ZONE", 90);
+    message_screen("LEVEL 1", "MEME ZONE", 90, 1);
     build_level_bg();
     new_game();
     sound_start();
@@ -708,7 +756,7 @@ void main(void) {
     oam_n = 0;
     for (;;) {
         title_screen();
-        if (play_level()) message_screen("STAGE CLEAR", "MEME ZONE DEFEATED", 180);
-        else message_screen("GAME OVER", "TRY AGAIN", 150);
+        if (play_level()) message_screen("STAGE CLEAR", "MEME ZONE DEFEATED", 180, 0);
+        else message_screen("GAME OVER", "TRY AGAIN", 150, 0);
     }
 }
