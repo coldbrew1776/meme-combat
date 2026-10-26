@@ -41,16 +41,30 @@ def rect(g, x0, y0, x1, y1, c):
 def soldier(run, enemy):
     """24x24 soldier facing right; the rifle ends on the last column."""
     g = canvas(24, 24)
+    if enemy:
+        # Tall monochrome invader: dome, antennae, huge eyes and tentacles.
+        rect(g, 10, 0, 11, 2, 3)
+        g[0][8] = g[0][13] = 3
+        rect(g, 5, 3, 18, 5, 3)
+        rect(g, 3, 6, 20, 14, 2)
+        rect(g, 5, 5, 18, 16, 3)
+        rect(g, 6, 7, 10, 12, 1)
+        rect(g, 14, 7, 18, 12, 1)
+        rect(g, 7, 8, 9, 10, 3)
+        rect(g, 15, 8, 17, 10, 3)
+        rect(g, 8, 14, 16, 15, 1)
+        rect(g, 4, 15, 20, 18, 2)
+        for x in (5, 9, 14, 18):
+            rect(g, x, 19, x + 1, 22, 3)
+            g[23][x - 1] = g[23][x] = g[23][x + 1] = 3
+        return ["".join(str(v) for v in r) for r in g]
     rect(g, 7, 0, 14, 2, 1)             # helmet / hair
     rect(g, 6, 2, 15, 3, 1)
     if not enemy:
         rect(g, 6, 4, 15, 8, 2)         # fuller face
     rect(g, 7, 4, 14, 8, 2)             # face
     rect(g, 8, 9, 13, 9, 2)             # neck
-    if enemy:
-        rect(g, 7, 4, 14, 5, 1)         # visor
-        g[5][12] = g[5][13] = 3         # glowing eyes
-    else:
+    if not enemy:
         rect(g, 6, 3, 15, 3, 3)         # headband
         g[5][12] = g[5][13] = 1         # eye
         rect(g, 11, 7, 14, 7, 1)        # smirk
@@ -96,11 +110,17 @@ RUN = soldier(True, False)
 LIE = lying(False)
 ENEMY_A = soldier(False, True)
 ENEMY_B = soldier(True, True)
-CAPSULE = [".333333.", "32222223", "32233223", "32233223", "32222223", "32222223",
-           "32222223", ".333333."]
-# A compact bright orb reads as a round shot at NES resolution.
-BULLET = ["........", "...33...", ".333333.", ".332233.", ".332233.", ".333333.",
-          "...33...", "........"]
+# A 16x16 supply crate is deliberately a generous target and remains a
+# recognizable package as it drops after being shot.
+PACKAGE = [
+    "..333333333333..", ".322222222222223.", "3211111111111123", "3213333333333123",
+    "3213222222223123", "3213222222223123", "3213222222223123", "3213222222223123",
+    "3213222222223123", "3213222222223123", "3213222222223123", "3213222222223123",
+    "3213333333333123", "3211111111111123", ".322222222222223.", "..333333333333..",
+]
+# A tighter 4x4 shot leaves more space between the action than the old orb.
+BULLET = ["........", "........", "..3333..", "..3223..", "..3223..", "..3333..",
+          "........", "........"]
 BOSS_BULLET = ["........", ".222222.", ".233332.", ".233332.", ".233332.", ".233332.",
                ".222222.", "........"]
 EXPLOSION = ["...33...", ".3.33.3.", "..3223..", "33222233", "33222233", "..3223..",
@@ -110,7 +130,7 @@ ARROW = ["..3.....", "..33....", "..333...", "..3333..", "..333...", "..33....",
 
 # tile numbers (keep in sync with src/main.c)
 T_STAND, T_RUN, T_LIE, T_BULLET = 0x70, 0x79, 0x82, 11
-T_ENEMY_A, T_ENEMY_B, T_CAPSULE, T_BOSS = 0x85, 0x8E, 20, 21
+T_ENEMY_A, T_ENEMY_B, T_CAPSULE, T_BOSS = 0x85, 0x8E, 0x98, 0xA0
 T_BOSS_BULLET, T_EXPLOSION, T_ARROW = 37, 38, 42
 
 blit(STAND, T_STAND, 3)
@@ -119,39 +139,36 @@ blit(LIE, T_LIE, 3)
 blit(BULLET, T_BULLET, 1)
 blit(ENEMY_A, T_ENEMY_A, 3)
 blit(ENEMY_B, T_ENEMY_B, 3)
-blit(CAPSULE, T_CAPSULE, 1)
+blit(PACKAGE, T_CAPSULE, 2)
 blit(BOSS_BULLET, T_BOSS_BULLET, 1)
 blit(EXPLOSION, T_EXPLOSION, 1)
 blit(ARROW, T_ARROW, 1)
 
 
 def boss_art():
-    g = [["."] * 32 for _ in range(32)]
-    for y in range(32):
-        for x in range(32):
-            d = ((x - 15.5) / 16.0) ** 2 + ((y - 15.5) / 16.0) ** 2
+    """A 40x40 floating alien commander with a large black-and-white dome."""
+    g = [["."] * 40 for _ in range(40)]
+    for y in range(40):
+        for x in range(40):
+            d = ((x - 19.5) / 20.0) ** 2 + ((y - 18.0) / 19.0) ** 2
             if d <= 1.0:
-                g[y][x] = "1" if d > 0.82 else "2"
-    for x0 in (7, 18):  # eyes
-        for y in range(10, 16):
-            for x in range(x0, x0 + 7):
-                g[y][x] = "3"
-        for y in range(12, 16):
-            for x in range(x0 + 2, x0 + 5):
-                g[y][x] = "1"
-    for i in range(7):  # angry brows
-        g[7 + i // 3][7 + i] = "1"
-        g[7 + i // 3][24 - i] = "1"
-    for y in range(21, 27):  # mouth with teeth
-        for x in range(9, 23):
-            g[y][x] = "1"
-    for x in range(9, 23, 3):
-        g[21][x] = g[21][x + 1] = "3"
-        g[26][x] = g[26][x + 1] = "3"
+                g[y][x] = "1" if d > 0.80 else "2"
+    for x0 in (7, 23):
+        rect(g, x0, 12, x0 + 9, 20, "1")
+        rect(g, x0 + 2, 14, x0 + 7, 18, "3")
+    for i in range(10):
+        g[8 + i // 3][7 + i] = "1"
+        g[8 + i // 3][32 - i] = "1"
+    rect(g, 11, 26, 28, 31, "1")
+    for x in range(12, 28, 3):
+        rect(g, x, 26, x + 1, 27, "3")
+        rect(g, x, 30, x + 1, 31, "3")
+    for x in (4, 34):
+        rect(g, x, 20, x + 2, 31, "1")
     return ["".join(str(v) for v in r) for r in g]
 
 
-blit(boss_art(), T_BOSS, 4)
+blit(boss_art(), T_BOSS, 5)
 
 # ---- font (3x5, ASCII-indexed so tile == character code) -------------------
 FONT = {

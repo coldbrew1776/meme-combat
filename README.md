@@ -16,5 +16,7 @@ Requires `cc65`, `python3` and Mesen.
     make run    # launches it in Mesen
 
 The HUD displays score: each enemy is worth 100 points and the boss is worth
-1,000 points, both multiplied by the level number. The game uses NES pulse
-channels for a looping background melody and weapon-fire effects.
+1,000 points, both multiplied by the level number. Jump input is buffered for
+a few frames so it remains responsive while running over ledges. The game uses
+NES pulse channels for a looping background melody and weapon-fire effects;
+the boss defeat sequence adds explosions and a victory fanfare.

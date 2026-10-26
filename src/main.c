@@ -42,8 +42,8 @@
 #define T_BULLET 11
 #define T_ENEMY_A 0x85
 #define T_ENEMY_B 0x8E
-#define T_CAPSULE 20
-#define T_BOSS 21
+#define T_CAPSULE 0x98
+#define T_BOSS 0xA0
 #define T_BOSS_BULLET 37
 #define T_EXPLOSION 38
 #define T_ARROW 42
@@ -75,6 +75,7 @@ typedef struct {
     unsigned char wpn;      /* 0 normal, 1 spread, 2 rapid */
     unsigned char cool;
     unsigned char step;
+    unsigned char jump_buffer, coyote;
 } Player;
 
 static Player pl[2];
@@ -89,9 +90,9 @@ static int bb_x[MAX_BB]; static unsigned char bb_y[MAX_BB], bb_on[MAX_BB];
 static int en_x[MAX_EN]; static unsigned char en_on[MAX_EN], en_spd[MAX_EN];
 static unsigned char spawn_t;
 static unsigned char boss_on, boss_hp, boss_flash, boss_shot, boss_dying;
-static int boss_x;
+static int boss_x; static unsigned char boss_y;
 static unsigned int score;
-static unsigned char level_number = 1, shot_sound, death_sound;
+static unsigned char level_number = 1, shot_sound, death_sound, victory_sound;
 /* The capsules sit just above usable ledges, rather than out in the sky. */
 static const int pu_world_x[NUM_PU] = { 670, 1170 };
 static unsigned char pu_state[NUM_PU], pu_y[NUM_PU];
@@ -99,10 +100,10 @@ static unsigned char pu_state[NUM_PU], pu_y[NUM_PU];
 static const unsigned char palette[32] = {
     /* background */
     0x0F, 0x00, 0x10, 0x30,  0x0F, 0x01, 0x11, 0x28,
-    0x0F, 0x17, 0x07, 0x27,  0x0F, 0x06, 0x28, 0x30,
+    0x0F, 0x00, 0x11, 0x21,  0x0F, 0x06, 0x16, 0x26,
     /* sprites */
     0x0F, 0x11, 0x27, 0x30,  0x0F, 0x16, 0x27, 0x30,
-    0x0F, 0x09, 0x27, 0x16,  0x0F, 0x07, 0x27, 0x30
+    0x0F, 0x00, 0x10, 0x30,  0x0F, 0x06, 0x16, 0x26
 };
 
 /* Relaxed Am - F - C - G loop: plucked pulse arpeggio over a triangle bass.
@@ -114,6 +115,7 @@ static const unsigned int music_arp[4][4] = {
 static const unsigned int music_bass[4] = { 507, 640, 427, 570 };
 static const unsigned char arp_order[8] = { 0, 1, 2, 3, 2, 1, 2, 1 };
 static const unsigned char title_blue[8] = { 0x02, 0x12, 0x22, 0x32, 0x22, 0x12, 0x02, 0x01 };
+static const unsigned int victory_notes[8] = { 213, 169, 142, 106, 142, 106, 84, 106 };
 
 static const char *const art[7][5] = {
     { "#..#", "####", "####", "#..#", "#..#" },   /* M */
@@ -220,6 +222,14 @@ static void add_spr24(int sx, int sy, unsigned char base, unsigned char attr, un
             add_spr(sx + c * 8, sy + r * 8, base + r * 3 + (flip ? 2 - c : c), attr);
 }
 
+/* A 40-pixel boss is visibly larger than the old 32-pixel sprite while
+   leaving enough OAM slots for the players, shots, and HUD. */
+static void add_spr40(int sx, int sy, unsigned char base, unsigned char attr) {
+    unsigned char r, c;
+    for (r = 0; r < 5; ++r)
+        for (c = 0; c < 5; ++c) add_spr(sx + c * 8, sy + r * 8, base + r * 5 + c, attr);
+}
+
 static void add_text(int sx, int sy, const char *s) {
     while (*s) { if (*s != ' ') add_spr(sx, sy, *s, 0); sx += 8; ++s; }
 }
@@ -240,7 +250,7 @@ static void sound_start(void) {
     APU_P1 = 0x43;                 /* 25% duty, short decaying pluck */
     APU_P2 = 0x7F;
     APU_TRI = 0xC0;
-    shot_sound = 0; death_sound = 0;
+    shot_sound = 0; death_sound = 0; victory_sound = 0;
 }
 
 /* Bullet: a noise crack plus a fast falling "pew" on pulse 2. */
@@ -263,9 +273,30 @@ static void sound_death(void) {
     APU_P2HI = 0x08;
 }
 
+static void sound_boss_defeat(void) {
+    shot_sound = death_sound = 0;
+    victory_sound = 180;
+    APU_NOISE = 0x0F;
+    APU_NZLO = 0x04;
+    APU_NZHI = 0x18;
+}
+
 static void sound_update(void) {
     unsigned int note;
     unsigned char chord = (frame >> 7) & 3;
+    if (victory_sound) {
+        unsigned char beat = (180 - victory_sound) >> 3;
+        if ((victory_sound & 7) == 0) {
+            note = victory_notes[beat & 7];
+            APU_P1 = 0x47; APU_P1LO = note & 0xFF; APU_P1HI = (note >> 8) & 7;
+            APU_TRILO = (note << 1) & 0xFF; APU_TRIHI = (note >> 7) & 7;
+        }
+        if ((victory_sound % 18) == 0) {
+            APU_NOISE = 0x0C; APU_NZLO = 0x03 + (beat & 3); APU_NZHI = 0x08;
+        }
+        --victory_sound;
+        return;
+    }
     if ((frame & 15) == 0) {
         note = music_arp[chord][arp_order[(frame >> 4) & 7]];
         APU_P1 = 0x43;
@@ -382,7 +413,7 @@ static void build_level_bg(void) {
         for (row = 0; row < 30; ++row) {
             for (col = 0; col < 32; ++col) {
                 c = nt * 32 + col;
-                /* Rolling mountains and a pine forest replace the old city. */
+                /* Cool slate ground with electric-blue seams replaces earth. */
                 h = 4 + ((c * 3 + 5) % 9);
                 top = 22 - h;
                 if (row >= 25) PPUDATA = T_EARTH;
@@ -413,7 +444,7 @@ static unsigned char overlap(int ax, int ay, int aw, int ah, int bx, int by, int
 static void new_game(void) {
     unsigned char i;
     cam = 0; frame = 0; spawn_t = 60; score = 0;
-    boss_on = boss_dying = 0; boss_hp = BOSS_HP; boss_flash = 0; boss_shot = 0;
+    boss_on = boss_dying = 0; boss_hp = BOSS_HP; boss_flash = 0; boss_shot = 0; boss_y = 136;
     for (i = 0; i < MAX_PB; ++i) pb_on[i] = 0;
     for (i = 0; i < MAX_BB; ++i) bb_on[i] = 0;
     for (i = 0; i < MAX_EN; ++i) en_on[i] = 0;
@@ -421,7 +452,7 @@ static void new_game(void) {
     for (i = 0; i < 2; ++i) {
         pl[i].x = 24 + i * 24; pl[i].y = GROUND; pl[i].vy = 0; pl[i].face = 0;
         pl[i].lie = 0; pl[i].lives = 3; pl[i].timer = 0; pl[i].inv = 60;
-        pl[i].wpn = 0; pl[i].cool = 0; pl[i].step = 0;
+        pl[i].wpn = 0; pl[i].cool = 0; pl[i].step = 0; pl[i].jump_buffer = pl[i].coyote = 0;
         pl[i].state = (i < nplayers) ? 1 : 0;
     }
 }
@@ -490,6 +521,12 @@ static void update_player(unsigned char i) {
     if (p->inv) --p->inv;
     floor = platform_floor(p->x + 12);
     ground = (p->y == floor);
+    /* Keep a short input buffer and a few frames of grace after an edge.
+       This makes jumping dependable even while running across ledges. */
+    if (pressed[i] & BTN_A) p->jump_buffer = 6;
+    else if (p->jump_buffer) --p->jump_buffer;
+    if (ground) p->coyote = 6;
+    else if (p->coyote) --p->coyote;
     p->lie = ground && (pd & BTN_DOWN);
     if (!p->lie) {
         if (pd & BTN_LEFT) { p->x -= 3; p->face = 1; ++p->step; }
@@ -497,7 +534,9 @@ static void update_player(unsigned char i) {
         floor = platform_floor(p->x + 12);
         ground = (p->y == floor);
         /* A is the only jump input; B is passed exclusively to shooting. */
-        if (ground && (pressed[i] & BTN_A)) p->vy = -10;
+        if (p->jump_buffer && p->coyote) {
+            p->vy = -10; p->jump_buffer = 0; p->coyote = 0;
+        }
     }
     if (p->x < cam) p->x = cam;
     if (p->x > cam + 232) p->x = cam + 232;
@@ -540,15 +579,15 @@ static void update_bullets(void) {
         }
         if (!pb_on[i]) continue;
         for (j = 0; j < NUM_PU; ++j) {
-            if (pu_state[j] == 0 && overlap(pb_x[i] + 2, pb_y[i] + 2, 4, 4, pu_world_x[j], pu_y[j], 8, 8)) {
+            if (pu_state[j] == 0 && overlap(pb_x[i] + 2, pb_y[i] + 2, 4, 4, pu_world_x[j], pu_y[j], 16, 16)) {
                 pu_state[j] = 1; pb_on[i] = 0; break;
             }
         }
         if (!pb_on[i]) continue;
-        if (boss_on && !boss_dying && overlap(pb_x[i] + 2, pb_y[i] + 2, 4, 4, boss_x + 2, GROUND - 32, 28, 32)) {
+        if (boss_on && !boss_dying && overlap(pb_x[i] + 2, pb_y[i] + 2, 4, 4, boss_x + 2, boss_y + 2, 36, 38)) {
             pb_on[i] = 0; boss_flash = 4;
             if (boss_hp) --boss_hp;
-            if (!boss_hp) { score += 1000 * level_number; boss_dying = 90; for (j = 0; j < MAX_BB; ++j) bb_on[j] = 0; }
+            if (!boss_hp) { score += 1000 * level_number; boss_dying = 90; sound_boss_defeat(); for (j = 0; j < MAX_BB; ++j) bb_on[j] = 0; }
         }
     }
 }
@@ -582,12 +621,13 @@ static void update_boss(void) {
     target = cam + 196 + ((frame & 64) ? (frame & 63) : (63 - (frame & 63))) / 3;
     if (boss_x > target) boss_x -= 2;
     else if (boss_x < target) boss_x += 1;
+    boss_y = 132 + (((frame & 64) ? (frame & 63) : (63 - (frame & 63))) >> 3);
     if (boss_x < cam + 250 && ++boss_shot >= 45) {
         boss_shot = 0;
         for (i = 0; i < MAX_BB; ++i) {
             if (bb_on[i]) continue;
             bb_on[i] = 1; bb_x[i] = boss_x - 6;
-            bb_y[i] = (frame & 64) ? 170 : 184;     /* high: duck, low: jump */
+            bb_y[i] = boss_y + 22;                  /* red alien blast */
             break;
         }
     }
@@ -611,9 +651,9 @@ static void check_damage(void) {
             if (en_on[j] == 1 && overlap(px, py, 12, ph, en_x[j] + 7, GROUND - 24, 10, 24)) kill_player(p);
         for (j = 0; j < MAX_BB; ++j)
             if (bb_on[j] && overlap(px, py, 12, ph, bb_x[j] + 1, bb_y[j] + 1, 6, 6)) kill_player(p);
-        if (boss_on && !boss_dying && overlap(px, py, 12, ph, boss_x + 4, GROUND - 30, 24, 30)) kill_player(p);
+        if (boss_on && !boss_dying && overlap(px, py, 12, ph, boss_x + 4, boss_y + 3, 32, 36)) kill_player(p);
         for (j = 0; j < NUM_PU; ++j)
-            if (pu_state[j] == 1 && overlap(px, py, 12, ph, pu_world_x[j], pu_y[j], 8, 8)) {
+            if (pu_state[j] == 1 && overlap(px, py, 12, ph, pu_world_x[j], pu_y[j], 16, 16)) {
                 p->wpn = j + 1; pu_state[j] = 2;
             }
     }
@@ -623,7 +663,7 @@ static void update_powerups(void) {
     unsigned char i;
     for (i = 0; i < NUM_PU; ++i) {
         if (pu_state[i] == 0) pu_y[i] = 132 + ((frame >> 3) & 3) * 2;
-        else if (pu_state[i] == 1 && pu_y[i] < GROUND - 8) pu_y[i] += 2;
+        else if (pu_state[i] == 1 && pu_y[i] < GROUND - 16) pu_y[i] += 2;
     }
 }
 
@@ -671,21 +711,20 @@ static void draw_all(void) {
         if (bb_on[i]) add_spr(bb_x[i] - cam, bb_y[i], T_BOSS_BULLET, 3);
     for (i = 0; i < NUM_PU; ++i) {
         sx = pu_world_x[i] - cam;
-        if (pu_state[i] == 0) add_spr(sx, pu_y[i], T_CAPSULE, 3);
-        else if (pu_state[i] == 1) add_spr(sx, pu_y[i], i ? 'R' : 'S', 3);
+        if (pu_state[i] == 0 || pu_state[i] == 1) {
+            add_spr16(sx, pu_y[i], T_CAPSULE, 0, 0);
+            if (pu_state[i] == 1) add_spr(sx + 5, pu_y[i] + 4, i ? 'R' : 'S', 3);
+        }
     }
     if (boss_on) {
         sx = boss_x - cam;
         if (boss_dying) {
             if (frame & 2) {
-                add_spr(sx + (rnd() & 31), GROUND - 4 - (rnd() & 31), T_EXPLOSION, 3);
-                add_spr(sx + (rnd() & 31), GROUND - 4 - (rnd() & 31), T_EXPLOSION, 3);
+                add_spr(sx + (rnd() % 40), boss_y + (rnd() % 40), T_EXPLOSION, 3);
+                add_spr(sx + (rnd() % 40), boss_y + (rnd() % 40), T_EXPLOSION, 3);
             }
         } else if (!(boss_flash & 2)) {
-            add_spr16(sx, GROUND - 32, T_BOSS, 3, 0);
-            add_spr16(sx + 16, GROUND - 32, T_BOSS + 4, 3, 0);
-            add_spr16(sx, GROUND - 16, T_BOSS + 8, 3, 0);
-            add_spr16(sx + 16, GROUND - 16, T_BOSS + 12, 3, 0);
+            add_spr40(sx, boss_y, T_BOSS, 2);
         }
     }
     /* HUD: lives, boss health bar */
