@@ -98,8 +98,9 @@ ENEMY_A = soldier(False, True)
 ENEMY_B = soldier(True, True)
 CAPSULE = [".333333.", "32222223", "32233223", "32233223", "32222223", "32222223",
            "32222223", ".333333."]
-BULLET = ["........", "........", "..3333..", "..3333..", "..3333..", "..3333..",
-          "........", "........"]
+# A compact bright orb reads as a round shot at NES resolution.
+BULLET = ["........", "...33...", ".333333.", ".332233.", ".332233.", ".333333.",
+          "...33...", "........"]
 BOSS_BULLET = ["........", ".222222.", ".233332.", ".233332.", ".233332.", ".233332.",
                ".222222.", "........"]
 EXPLOSION = ["...33...", ".3.33.3.", "..3223..", "33222233", "33222233", "..3223..",
@@ -173,17 +174,8 @@ for ch, bits in FONT.items():
         if b == "1":
             t[2 + i // 3][2 + i % 3] = 3
 
-# big 16x16 glyphs (2x2 tiles each) for the level title screen; keep BIG_SET
-# and T_BIG in sync with src/main.c
-BIG_SET, T_BIG = "LEVM1ZON", 0xA0
-for n, ch in enumerate(BIG_SET):
-    for y in range(16):
-        for x in range(16):
-            if FONT[ch][min(y // 3, 4) * 3 + min(x // 5, 2)] == "1":
-                tile(T_BIG + n * 4 + (y // 8) * 2 + x // 8)[y % 8][x % 8] = 3
-
 # ---- background tiles ------------------------------------------------------
-T_GRASS, T_EARTH, T_CLOUD, T_MOUNTAIN, T_PINE, T_LOGO = 0x5B, 0x5C, 0x5D, 0x5E, 0x5F, 0x60
+T_GRASS, T_EARTH, T_CLOUD, T_MOUNTAIN, T_PINE, T_LOGO, T_PLATFORM = 0x5B, 0x5C, 0x5D, 0x5E, 0x5F, 0x60, 0x61
 g = tile(T_GRASS)
 for y in range(8):
     for x in range(8):
@@ -211,6 +203,10 @@ lg = tile(T_LOGO)
 for y in range(8):
     for x in range(8):
         lg[y][x] = 1 if x in (0, 7) or y in (0, 7) else 2
+pl = tile(T_PLATFORM)
+for y in range(8):
+    for x in range(8):
+        pl[y][x] = 3 if y < 2 else (1 if (x + y) % 3 else 2)
 
 
 def encode(t):
