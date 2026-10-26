@@ -10,6 +10,13 @@
 #define OAMDMA    REG(0x4014)
 #define JOY1      REG(0x4016)
 #define JOY2      REG(0x4017)
+#define APU_P1    REG(0x4000)
+#define APU_P1LO  REG(0x4002)
+#define APU_P1HI  REG(0x4003)
+#define APU_P2    REG(0x4004)
+#define APU_P2LO  REG(0x4006)
+#define APU_P2HI  REG(0x4007)
+#define APU_ON    REG(0x4015)
 #define OAM       ((unsigned char *)0x0200)
 
 /* controller bits */
@@ -35,10 +42,10 @@
 #define T_EXPLOSION 38
 #define T_ARROW 42
 #define T_GRASS 0x5B
-#define T_BRICK 0x5C
-#define T_STAR 0x5D
-#define T_BLDG 0x5E
-#define T_WINDOW 0x5F
+#define T_EARTH 0x5C
+#define T_CLOUD 0x5D
+#define T_MOUNTAIN 0x5E
+#define T_PINE 0x5F
 #define T_LOGO 0x60
 
 #define GROUND 192          /* y of the players' feet */
@@ -76,6 +83,8 @@ static int en_x[MAX_EN]; static unsigned char en_on[MAX_EN], en_spd[MAX_EN];
 static unsigned char spawn_t;
 static unsigned char boss_on, boss_hp, boss_flash, boss_shot, boss_dying;
 static int boss_x;
+static unsigned int score;
+static unsigned char level_number = 1, shot_sound;
 static const int pu_world_x[NUM_PU] = { 520, 1150 };
 static unsigned char pu_state[NUM_PU], pu_y[NUM_PU];
 
@@ -86,6 +95,12 @@ static const unsigned char palette[32] = {
     /* sprites */
     0x0F, 0x11, 0x27, 0x30,  0x0F, 0x16, 0x27, 0x30,
     0x0F, 0x09, 0x27, 0x16,  0x0F, 0x07, 0x27, 0x30
+};
+
+/* Short, looping pulse melody.  The second pulse is kept free for shots. */
+static const unsigned int music_notes[16] = {
+    427, 380, 339, 320, 339, 380, 427, 0,
+    427, 380, 339, 320, 285, 320, 339, 0
 };
 
 static const char *const art[7][5] = {
@@ -177,6 +192,42 @@ static void add_text(int sx, int sy, const char *s) {
     while (*s) { if (*s != ' ') add_spr(sx, sy, *s, 0); sx += 8; ++s; }
 }
 
+static void add_score(unsigned int value) {
+    unsigned char digit, i;
+    for (i = 0; i < 5; ++i) {
+        digit = value / 10000;
+        add_spr(104 + i * 8, 8, '0' + digit, 0);
+        value = (value - (unsigned int)digit * 10000) * 10;
+    }
+}
+
+static void sound_off(void) { APU_ON = 0; }
+
+static void sound_start(void) {
+    APU_ON = 0x03;
+    APU_P1 = 0xBF;                 /* 50% duty, medium volume */
+    APU_P2 = 0x7F;
+    shot_sound = 0;
+}
+
+static void sound_shoot(void) {
+    APU_P2 = 0x7F;
+    APU_P2LO = 0x50;
+    APU_P2HI = 0x08;
+    shot_sound = 5;
+}
+
+static void sound_update(void) {
+    unsigned int note;
+    if ((frame & 15) == 0) {
+        note = music_notes[(frame >> 4) & 15];
+        if (note) { APU_P1LO = note & 0xFF; APU_P1HI = (note >> 8) & 7; }
+        else APU_P1 = 0x30;
+    }
+    if ((frame & 15) == 1) APU_P1 = 0xBF;
+    if (shot_sound && --shot_sound == 0) APU_P2 = 0x30;
+}
+
 static unsigned char rnd(void) {
     rng = (rng << 1) ^ ((rng & 0x80) ? 0x1D : 0);
     return rng;
@@ -212,6 +263,7 @@ static void title_screen(void) {
     unsigned char i;
     static const unsigned char meme[4] = { 0, 1, 0, 1 };
     static const unsigned char blitz[5] = { 2, 3, 4, 5, 6 };
+    sound_off();
     screen_off();
     /* Tile zero uses the universal background colour ($0F: black).  Filling
        the whole name table first guarantees that the title never exposes the
@@ -249,7 +301,7 @@ static void message_screen(const char *l1, const char *l2, unsigned char frames)
 /* ---------------------------------------------------------- level BG --- */
 
 static void build_level_bg(void) {
-    unsigned char nt, col, row, b, h, top, c;
+    unsigned char nt, col, row, h, top, c;
     unsigned int base;
     screen_off();
     load_palette();
@@ -259,18 +311,18 @@ static void build_level_bg(void) {
         for (row = 0; row < 30; ++row) {
             for (col = 0; col < 32; ++col) {
                 c = nt * 32 + col;
-                b = c >> 2;
-                h = 4 + ((b * 5 + 3) % 7) * 2;      /* skyline, period of 16 buildings */
-                top = 24 - h;
-                if (row >= 25) PPUDATA = T_BRICK;
+                /* Rolling mountains and a pine forest replace the old city. */
+                h = 4 + ((c * 3 + 5) % 9);
+                top = 22 - h;
+                if (row >= 25) PPUDATA = T_EARTH;
                 else if (row == 24) PPUDATA = T_GRASS;
-                else if (row >= top && (c & 3) != 3)
-                    PPUDATA = ((c & 3) != 0 && (row & 1)) ? T_WINDOW : T_BLDG;
-                else if (row < 12 && ((c * 7 + row * 13) % 23) == 0) PPUDATA = T_STAR;
+                else if (row >= top && row < 22) PPUDATA = T_MOUNTAIN;
+                else if (row >= 19 && (c % 7 == 2 || c % 11 == 5)) PPUDATA = T_PINE;
+                else if (row < 11 && ((c * 5 + row * 9) % 31) == 0) PPUDATA = T_CLOUD;
                 else PPUDATA = 0;
             }
         }
-        /* attributes: sky pal0, skyline pal1, ground pal2 */
+        /* attributes: sky pal0, mountains pal1, ground pal2 */
         for (row = 0; row < 8; ++row)
             for (col = 0; col < 8; ++col)
                 PPUDATA = (row < 3) ? 0x00 : (row < 6) ? 0x55 : 0xAA;
@@ -285,7 +337,7 @@ static unsigned char overlap(int ax, int ay, int aw, int ah, int bx, int by, int
 
 static void new_game(void) {
     unsigned char i;
-    cam = 0; frame = 0; spawn_t = 60;
+    cam = 0; frame = 0; spawn_t = 60; score = 0;
     boss_on = boss_dying = 0; boss_hp = BOSS_HP; boss_flash = 0; boss_shot = 0;
     for (i = 0; i < MAX_PB; ++i) pb_on[i] = 0;
     for (i = 0; i < MAX_BB; ++i) bb_on[i] = 0;
@@ -308,6 +360,7 @@ static void fire_bullet(Player *p, signed char dx, signed char dy) {
         pb_y[i] = p->lie ? p->y - 6 : p->y - 13;
         pb_dx[i] = p->face ? -dx : dx;
         pb_dy[i] = dy;
+        sound_shoot();
         return;
     }
 }
@@ -389,7 +442,7 @@ static void update_bullets(void) {
         if (sx < -8 || sx > 256 || pb_y[i] < 8 || pb_y[i] > 200) { pb_on[i] = 0; continue; }
         for (j = 0; j < MAX_EN; ++j) {
             if (en_on[j] == 1 && overlap(pb_x[i] + 2, pb_y[i] + 2, 4, 4, en_x[j] + 3, GROUND - 16, 10, 16)) {
-                en_on[j] = 2; pb_on[i] = 0; break;   /* 2 = dying */
+                en_on[j] = 2; score += 100 * level_number; pb_on[i] = 0; break;   /* 2 = dying */
             }
         }
         if (!pb_on[i]) continue;
@@ -402,7 +455,7 @@ static void update_bullets(void) {
         if (boss_on && !boss_dying && overlap(pb_x[i] + 2, pb_y[i] + 2, 4, 4, boss_x + 2, GROUND - 32, 28, 32)) {
             pb_on[i] = 0; boss_flash = 4;
             if (boss_hp) --boss_hp;
-            if (!boss_hp) { boss_dying = 90; for (j = 0; j < MAX_BB; ++j) bb_on[j] = 0; }
+            if (!boss_hp) { score += 1000 * level_number; boss_dying = 90; for (j = 0; j < MAX_BB; ++j) bb_on[j] = 0; }
         }
     }
 }
@@ -537,6 +590,8 @@ static void draw_all(void) {
         add_text(200, 8, "P2");
         add_spr(220, 8, '0' + pl[1].lives, 0);
     }
+    add_text(56, 8, "SCORE");
+    add_score(score);
     if (boss_on) {
         add_text(8, 24, "BOSS");
         for (i = 0; i < (boss_hp + 1) / 2; ++i) add_spr(48 + i * 8, 24, T_BOSS_BULLET, 3);
@@ -551,6 +606,7 @@ static unsigned char play_level(void) {
     message_screen("LEVEL 1", "MEME ZONE", 90);
     build_level_bg();
     new_game();
+    sound_start();
     screen_on();
     for (;;) {
         read_pads();
@@ -561,6 +617,7 @@ static unsigned char play_level(void) {
         update_boss();
         update_powerups();
         check_damage();
+        sound_update();
         draw_all();
         present();
         if (boss_on && boss_dying == 1) return 1;
