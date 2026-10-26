@@ -53,7 +53,7 @@
 #define T_MOUNTAIN 0x5E
 #define T_PINE 0x5F
 #define T_LOGO 0x60
-#define T_BIG 0xA0          /* 16x16 glyphs, see BIG_SET in tools/gen_chr.py */
+#define T_PLATFORM 0x61
 
 #define GROUND 192          /* y of the players' feet */
 #define LEVEL_END 1800      /* camera stops here and the boss arrives */
@@ -92,8 +92,8 @@ static unsigned char boss_on, boss_hp, boss_flash, boss_shot, boss_dying;
 static int boss_x;
 static unsigned int score;
 static unsigned char level_number = 1, shot_sound, death_sound;
-static const char big_set[] = "LEVM1ZON";
-static const int pu_world_x[NUM_PU] = { 520, 1150 };
+/* The capsules sit just above usable ledges, rather than out in the sky. */
+static const int pu_world_x[NUM_PU] = { 670, 1170 };
 static unsigned char pu_state[NUM_PU], pu_y[NUM_PU];
 
 static const unsigned char palette[32] = {
@@ -359,31 +359,12 @@ static void title_screen(void) {
     title_anim = 0;
 }
 
-/* Centered text from 16x16 glyphs (letters in big_set only). */
-static void put_big(const char *s, unsigned char row) {
-    unsigned char col = 16 - (unsigned char)strlen(s), n, r, k;
-    const char *q;
-    for (r = 0; r < 2; ++r) {
-        ppu_addr(0x2000 + (unsigned int)(row + r) * 32 + col);
-        for (q = s; *q; ++q) {
-            n = 0;
-            for (k = 0; big_set[k]; ++k) if (big_set[k] == *q) n = T_BIG + k * 4 + r * 2;
-            PPUDATA = n; PPUDATA = n ? n + 1 : 0;
-        }
-    }
-}
-
-static void message_screen(const char *l1, const char *l2, unsigned char frames, unsigned char big) {
+static void message_screen(const char *l1, const char *l2, unsigned char frames) {
     screen_off();
     fill_nt(0x2000, 0, 0);
     load_palette();
-    if (big) {
-        put_big(l1, 9);
-        put_big(l2, 14);
-    } else {
-        put_text(16 - (unsigned char)strlen(l1) / 2, 11, l1);
-        put_text(16 - (unsigned char)strlen(l2) / 2, 14, l2);
-    }
+    put_text(16 - (unsigned char)strlen(l1) / 2, 11, l1);
+    put_text(16 - (unsigned char)strlen(l2) / 2, 14, l2);
     screen_on();
     while (frames--) present();
 }
@@ -406,6 +387,10 @@ static void build_level_bg(void) {
                 top = 22 - h;
                 if (row >= 25) PPUDATA = T_EARTH;
                 else if (row == 24) PPUDATA = T_GRASS;
+                /* Solid ledges: three heights provide stepping stones. */
+                else if ((row == 20 && c >= 18 && c <= 25) ||
+                         (row == 18 && c >= 38 && c <= 46) ||
+                         (row == 21 && c >= 56 && c <= 62)) PPUDATA = T_PLATFORM;
                 else if (row >= top && row < 22) PPUDATA = T_MOUNTAIN;
                 else if (row >= 19 && (c % 7 == 2 || c % 11 == 5)) PPUDATA = T_PINE;
                 else if (row < 11 && ((c * 5 + row * 9) % 31) == 0) PPUDATA = T_CLOUD;
@@ -432,7 +417,7 @@ static void new_game(void) {
     for (i = 0; i < MAX_PB; ++i) pb_on[i] = 0;
     for (i = 0; i < MAX_BB; ++i) bb_on[i] = 0;
     for (i = 0; i < MAX_EN; ++i) en_on[i] = 0;
-    for (i = 0; i < NUM_PU; ++i) { pu_state[i] = 0; pu_y[i] = 110; }
+    for (i = 0; i < NUM_PU; ++i) { pu_state[i] = 0; pu_y[i] = 132; }
     for (i = 0; i < 2; ++i) {
         pl[i].x = 24 + i * 24; pl[i].y = GROUND; pl[i].vy = 0; pl[i].face = 0;
         pl[i].lie = 0; pl[i].lives = 3; pl[i].timer = 0; pl[i].inv = 60;
@@ -463,10 +448,10 @@ static void player_shoot(Player *p, unsigned char btn_pressed, unsigned char btn
         fire_bullet(p, 6, 0); p->cool = 5;
     } else if (btn_pressed) {
         if (p->wpn == 1) {
-            fire_bullet(p, 4, -2); fire_bullet(p, 4, 0); fire_bullet(p, 4, 2);
+            fire_bullet(p, 6, -2); fire_bullet(p, 6, 0); fire_bullet(p, 6, 2);
             p->cool = 12;
         } else {
-            fire_bullet(p, 4, 0); p->cool = 8;
+            fire_bullet(p, 6, 0); p->cool = 8;
         }
     }
 }
@@ -478,10 +463,21 @@ static void kill_player(Player *p) {
     if (p->lives) --p->lives;
 }
 
+/* The landscape repeats every two name tables (512 pixels).  Return the
+   walkable top under a player's centre; every other location is ground. */
+static unsigned char platform_floor(int x) {
+    unsigned int local = (unsigned int)x & 0x01FF;
+    if (local >= 144 && local <= 207) return 160;
+    if (local >= 304 && local <= 375) return 144;
+    if (local >= 448 && local <= 503) return 168;
+    return GROUND;
+}
+
 static void update_player(unsigned char i) {
     Player *p = &pl[i];
     unsigned char pd = pad[i];
-    unsigned char ground;
+    unsigned char ground, floor;
+    int old_y;
     if (p->state == 2) {
         if (--p->timer == 0) {
             if (p->lives) {
@@ -492,20 +488,26 @@ static void update_player(unsigned char i) {
     }
     if (p->state == 0) return;
     if (p->inv) --p->inv;
-    ground = (p->y >= GROUND);
+    floor = platform_floor(p->x + 12);
+    ground = (p->y == floor);
     p->lie = ground && (pd & BTN_DOWN);
     if (!p->lie) {
-        if (pd & BTN_LEFT) { p->x -= 2; p->face = 1; ++p->step; }
-        else if (pd & BTN_RIGHT) { p->x += 2; p->face = 0; ++p->step; }
+        if (pd & BTN_LEFT) { p->x -= 3; p->face = 1; ++p->step; }
+        else if (pd & BTN_RIGHT) { p->x += 3; p->face = 0; ++p->step; }
+        floor = platform_floor(p->x + 12);
+        ground = (p->y == floor);
+        /* A is the only jump input; B is passed exclusively to shooting. */
         if (ground && (pressed[i] & BTN_A)) p->vy = -10;
     }
     if (p->x < cam) p->x = cam;
     if (p->x > cam + 232) p->x = cam + 232;
     /* jump physics: strong gravity applied every frame for a smooth arc */
     if (p->y < GROUND || p->vy < 0) {
+        old_y = p->y;
         p->y += p->vy;
         if (p->vy < 10) ++p->vy;
-        if (p->y >= GROUND && p->vy >= 0) { p->y = GROUND; p->vy = 0; }
+        floor = platform_floor(p->x + 12);
+        if (p->vy >= 0 && old_y <= floor && p->y >= floor) { p->y = floor; p->vy = 0; }
     }
     player_shoot(p, pressed[i] & BTN_B, pd & BTN_B);
 }
@@ -557,7 +559,7 @@ static void update_enemies(void) {
         spawn_t = 35 + (rnd() & 31);
         for (i = 0; i < MAX_EN; ++i) {
             if (en_on[i]) continue;
-            en_on[i] = 1; en_x[i] = cam + 258; en_spd[i] = 1 + (rnd() & 1);
+            en_on[i] = 1; en_x[i] = cam + 258; en_spd[i] = 2 + (rnd() & 1);
             break;
         }
     }
@@ -591,7 +593,7 @@ static void update_boss(void) {
     }
     for (i = 0; i < MAX_BB; ++i) {
         if (!bb_on[i]) continue;
-        bb_x[i] -= 3;
+        bb_x[i] -= 4;
         if (bb_x[i] < cam - 8) bb_on[i] = 0;
     }
 }
@@ -620,7 +622,7 @@ static void check_damage(void) {
 static void update_powerups(void) {
     unsigned char i;
     for (i = 0; i < NUM_PU; ++i) {
-        if (pu_state[i] == 0) pu_y[i] = 110 + ((frame >> 3) & 3) * 2;
+        if (pu_state[i] == 0) pu_y[i] = 132 + ((frame >> 3) & 3) * 2;
         else if (pu_state[i] == 1 && pu_y[i] < GROUND - 8) pu_y[i] += 2;
     }
 }
@@ -723,7 +725,7 @@ static void pause_game(void) {
 /* returns 1 if the level was cleared, 0 on game over */
 static unsigned char play_level(void) {
     unsigned char i;
-    message_screen("LEVEL 1", "MEME ZONE", 90, 1);
+    message_screen("LEVEL 1", "MEME ZONE", 90);
     build_level_bg();
     new_game();
     sound_start();
@@ -756,7 +758,7 @@ void main(void) {
     oam_n = 0;
     for (;;) {
         title_screen();
-        if (play_level()) message_screen("STAGE CLEAR", "MEME ZONE DEFEATED", 180, 0);
-        else message_screen("GAME OVER", "TRY AGAIN", 150, 0);
+        if (play_level()) message_screen("STAGE CLEAR", "MEME ZONE DEFEATED", 180);
+        else message_screen("GAME OVER", "TRY AGAIN", 150);
     }
 }
