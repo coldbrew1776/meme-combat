@@ -28,30 +28,71 @@ def blit(art, base, w_tiles):
 
 
 # ---- sprites -------------------------------------------------------------
-STAND = [
-    "......1111......", ".....133331.....", ".....122221.....", ".....122321.....",
-    ".....122221.....", "......1221......", "....33333333....", "...33133331333..",
-    "....33333333....", ".....311113.....", ".....31..13.....", "....331..133....",
-    "....31....13....", "....31....13....", "...331....133...", "...11......11...",
-]
-RUN = STAND[:11] + [
-    "....111..111....", "...111....111...", "..111......111..", "..11........11..",
-    ".111.........111",
-]
-LIE = [
-    "................", "..........2222..", ".11111111122322.", "111111111122222.",
-    "11111111111133333", "................", "................", "................",
-]
-ENEMY_A = [
-    "......3333......", ".....311113.....", ".....122221.....", ".....123321.....",
-    ".....122221.....", "......1221......", "....11111111....", ".1111311113111..",
-    "....11111111....", ".....113311.....", ".....13..31.....", "....113..311....",
-    "....13....31....", "....13....31....", "...113....311...", "...33......33...",
-]
-ENEMY_B = ENEMY_A[:11] + [
-    "....111..111....", "...111....111...", "..111......111..", "..11........11..",
-    ".111.........111",
-]
+def canvas(w, h):
+    return [["."] * w for _ in range(h)]
+
+
+def rect(g, x0, y0, x1, y1, c):
+    for y in range(y0, y1 + 1):
+        for x in range(x0, x1 + 1):
+            g[y][x] = c
+
+
+def soldier(run, enemy):
+    """24x24 soldier facing right; the rifle ends on the last column."""
+    g = canvas(24, 24)
+    rect(g, 7, 0, 14, 2, 1)             # helmet / hair
+    rect(g, 6, 2, 15, 3, 1)
+    rect(g, 7, 4, 14, 8, 2)             # face
+    rect(g, 8, 9, 13, 9, 2)             # neck
+    if enemy:
+        rect(g, 7, 4, 14, 5, 1)         # visor
+        g[5][12] = g[5][13] = 3         # glowing eyes
+    else:
+        rect(g, 6, 3, 15, 3, 3)         # headband
+        g[5][12] = g[5][13] = 1         # eye
+        rect(g, 11, 7, 14, 7, 1)        # smirk
+    rect(g, 5, 10, 16, 16, 3)           # torso
+    rect(g, 5, 10, 16, 10, 1)           # collar
+    rect(g, 5, 15, 16, 16, 1)           # belt
+    g[15][10] = g[15][11] = 3           # buckle
+    rect(g, 3, 11, 5, 15, 2)            # rear arm
+    rect(g, 16, 11, 18, 14, 2)          # front arm
+    rect(g, 17, 11, 23, 12, 1)          # rifle barrel
+    rect(g, 16, 13, 20, 14, 1)          # rifle body
+    g[11][22] = 3
+    if run:
+        for y in range(17, 24):
+            x = 9 - (y - 17)
+            rect(g, x, y, x + 2, y, 3 if y == 23 else 1)
+            x = 12 + (y - 17)
+            rect(g, x, y, x + 2, y, 3 if y == 23 else 1)
+    else:
+        rect(g, 6, 17, 9, 22, 1)
+        rect(g, 12, 17, 15, 22, 1)
+        rect(g, 5, 23, 10, 23, 3)
+        rect(g, 11, 23, 16, 23, 3)
+    return ["".join(str(v) for v in r) for r in g]
+
+
+def lying(enemy):
+    g = canvas(24, 8)
+    rect(g, 0, 4, 5, 6, 1)              # legs
+    rect(g, 6, 3, 15, 6, 3)             # torso
+    rect(g, 6, 5, 15, 5, 1)
+    rect(g, 16, 2, 20, 6, 2)            # head
+    rect(g, 16, 1, 20, 2, 1)
+    g[4][19] = 3 if enemy else 1
+    rect(g, 14, 4, 18, 5, 2)            # arm
+    rect(g, 17, 5, 23, 6, 1)            # rifle
+    return ["".join(str(v) for v in r) for r in g]
+
+
+STAND = soldier(False, False)
+RUN = soldier(True, False)
+LIE = lying(False)
+ENEMY_A = soldier(False, True)
+ENEMY_B = soldier(True, True)
 CAPSULE = [".333333.", "32222223", "32233223", "32233223", "32222223", "32222223",
            "32222223", ".333333."]
 BULLET = ["........", "........", "..3333..", "..3333..", "..3333..", "..3333..",
@@ -64,16 +105,16 @@ ARROW = ["..3.....", "..33....", "..333...", "..3333..", "..333...", "..33....",
          "..3.....", "........"]
 
 # tile numbers (keep in sync with src/main.c)
-T_STAND, T_RUN, T_LIE, T_BULLET = 1, 5, 9, 11
-T_ENEMY_A, T_ENEMY_B, T_CAPSULE, T_BOSS = 12, 16, 20, 21
+T_STAND, T_RUN, T_LIE, T_BULLET = 0x70, 0x79, 0x82, 11
+T_ENEMY_A, T_ENEMY_B, T_CAPSULE, T_BOSS = 0x85, 0x8E, 20, 21
 T_BOSS_BULLET, T_EXPLOSION, T_ARROW = 37, 38, 42
 
-blit(STAND, T_STAND, 2)
-blit(RUN, T_RUN, 2)
-blit(LIE, T_LIE, 2)
+blit(STAND, T_STAND, 3)
+blit(RUN, T_RUN, 3)
+blit(LIE, T_LIE, 3)
 blit(BULLET, T_BULLET, 1)
-blit(ENEMY_A, T_ENEMY_A, 2)
-blit(ENEMY_B, T_ENEMY_B, 2)
+blit(ENEMY_A, T_ENEMY_A, 3)
+blit(ENEMY_B, T_ENEMY_B, 3)
 blit(CAPSULE, T_CAPSULE, 1)
 blit(BOSS_BULLET, T_BOSS_BULLET, 1)
 blit(EXPLOSION, T_EXPLOSION, 1)
@@ -103,7 +144,7 @@ def boss_art():
     for x in range(9, 23, 3):
         g[21][x] = g[21][x + 1] = "3"
         g[26][x] = g[26][x + 1] = "3"
-    return ["".join(r) for r in g]
+    return ["".join(str(v) for v in r) for r in g]
 
 
 blit(boss_art(), T_BOSS, 4)
