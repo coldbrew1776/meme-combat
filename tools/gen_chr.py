@@ -43,6 +43,8 @@ def soldier(run, enemy):
     g = canvas(24, 24)
     rect(g, 7, 0, 14, 2, 1)             # helmet / hair
     rect(g, 6, 2, 15, 3, 1)
+    if not enemy:
+        rect(g, 6, 4, 15, 8, 2)         # fuller face
     rect(g, 7, 4, 14, 8, 2)             # face
     rect(g, 8, 9, 13, 9, 2)             # neck
     if enemy:
@@ -52,26 +54,27 @@ def soldier(run, enemy):
         rect(g, 6, 3, 15, 3, 3)         # headband
         g[5][12] = g[5][13] = 1         # eye
         rect(g, 11, 7, 14, 7, 1)        # smirk
-    rect(g, 5, 10, 16, 16, 3)           # torso
-    rect(g, 5, 10, 16, 10, 1)           # collar
-    rect(g, 5, 15, 16, 16, 1)           # belt
+    t = 0 if enemy else 1               # the hero is built a little thicker
+    rect(g, 5 - t, 10, 16 + t, 16, 3)   # torso
+    rect(g, 5 - t, 10, 16 + t, 10, 1)   # collar
+    rect(g, 5 - t, 15, 16 + t, 16, 1)   # belt
     g[15][10] = g[15][11] = 3           # buckle
-    rect(g, 3, 11, 5, 15, 2)            # rear arm
-    rect(g, 16, 11, 18, 14, 2)          # front arm
-    rect(g, 17, 11, 23, 12, 1)          # rifle barrel
-    rect(g, 16, 13, 20, 14, 1)          # rifle body
+    rect(g, 2 - t, 11, 5 - t, 15, 2)    # rear arm
+    rect(g, 16 + t, 11, 18 + t, 14, 2)  # front arm
+    rect(g, 17 + t, 11, 23, 12, 1)      # rifle barrel
+    rect(g, 16 + t, 13, 20, 14, 1)      # rifle body
     g[11][22] = 3
     if run:
         for y in range(17, 24):
             x = 9 - (y - 17)
-            rect(g, x, y, x + 2, y, 3 if y == 23 else 1)
+            rect(g, x - t, y, x + 2 + t, y, 3 if y == 23 else 1)
             x = 12 + (y - 17)
-            rect(g, x, y, x + 2, y, 3 if y == 23 else 1)
+            rect(g, x - t, y, x + 2 + t, y, 3 if y == 23 else 1)
     else:
-        rect(g, 6, 17, 9, 22, 1)
-        rect(g, 12, 17, 15, 22, 1)
-        rect(g, 5, 23, 10, 23, 3)
-        rect(g, 11, 23, 16, 23, 3)
+        rect(g, 6 - t, 17, 9, 22, 1)
+        rect(g, 12, 17, 15 + t, 22, 1)
+        rect(g, 5 - t, 23, 10, 23, 3)
+        rect(g, 11, 23, 16 + t, 23, 3)
     return ["".join(str(v) for v in r) for r in g]
 
 
@@ -169,6 +172,15 @@ for ch, bits in FONT.items():
     for i, b in enumerate(bits):
         if b == "1":
             t[2 + i // 3][2 + i % 3] = 3
+
+# big 16x16 glyphs (2x2 tiles each) for the level title screen; keep BIG_SET
+# and T_BIG in sync with src/main.c
+BIG_SET, T_BIG = "LEVM1ZON", 0xA0
+for n, ch in enumerate(BIG_SET):
+    for y in range(16):
+        for x in range(16):
+            if FONT[ch][min(y // 3, 4) * 3 + min(x // 5, 2)] == "1":
+                tile(T_BIG + n * 4 + (y // 8) * 2 + x // 8)[y % 8][x % 8] = 3
 
 # ---- background tiles ------------------------------------------------------
 T_GRASS, T_EARTH, T_CLOUD, T_MOUNTAIN, T_PINE, T_LOGO = 0x5B, 0x5C, 0x5D, 0x5E, 0x5F, 0x60
