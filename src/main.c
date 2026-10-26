@@ -16,6 +16,12 @@
 #define APU_P2    REG(0x4004)
 #define APU_P2LO  REG(0x4006)
 #define APU_P2HI  REG(0x4007)
+#define APU_TRI   REG(0x4008)
+#define APU_TRILO REG(0x400A)
+#define APU_TRIHI REG(0x400B)
+#define APU_NOISE REG(0x400C)
+#define APU_NZLO  REG(0x400E)
+#define APU_NZHI  REG(0x400F)
 #define APU_ON    REG(0x4015)
 #define OAM       ((unsigned char *)0x0200)
 
@@ -30,12 +36,12 @@
 #define BTN_RIGHT 0x01
 
 /* tile numbers (keep in sync with tools/gen_chr.py) */
-#define T_STAND 1
-#define T_RUN 5
-#define T_LIE 9
+#define T_STAND 0x70
+#define T_RUN 0x79
+#define T_LIE 0x82
 #define T_BULLET 11
-#define T_ENEMY_A 12
-#define T_ENEMY_B 16
+#define T_ENEMY_A 0x85
+#define T_ENEMY_B 0x8E
 #define T_CAPSULE 20
 #define T_BOSS 21
 #define T_BOSS_BULLET 37
@@ -74,7 +80,7 @@ static Player pl[2];
 static unsigned char pad[2], pressed[2], old_pad[2];
 static unsigned char nplayers;
 static int cam;
-static unsigned char frame, oam_n, rng = 0x5A;
+static unsigned char frame, oam_n, rng = 0x5A, title_anim;
 
 static int pb_x[MAX_PB]; static unsigned char pb_y[MAX_PB];
 static signed char pb_dx[MAX_PB], pb_dy[MAX_PB]; static unsigned char pb_on[MAX_PB];
@@ -97,11 +103,15 @@ static const unsigned char palette[32] = {
     0x0F, 0x09, 0x27, 0x16,  0x0F, 0x07, 0x27, 0x30
 };
 
-/* Short, looping pulse melody.  The second pulse is kept free for shots. */
-static const unsigned int music_notes[16] = {
-    427, 380, 339, 320, 339, 380, 427, 0,
-    427, 380, 339, 320, 285, 320, 339, 0
+/* Relaxed Am - F - C - G loop: plucked pulse arpeggio over a triangle bass.
+   Pulse 2 is kept free for shots, noise for the gunfire crack. */
+static const unsigned int music_arp[4][4] = {
+    { 253, 213, 169, 126 }, { 319, 253, 213, 159 },
+    { 213, 169, 142, 106 }, { 284, 225, 189, 142 }
 };
+static const unsigned int music_bass[4] = { 507, 640, 427, 570 };
+static const unsigned char arp_order[8] = { 0, 1, 2, 3, 2, 1, 2, 1 };
+static const unsigned char title_blue[8] = { 0x02, 0x12, 0x22, 0x32, 0x22, 0x12, 0x02, 0x01 };
 
 static const char *const art[7][5] = {
     { "#..#", "####", "####", "#..#", "#..#" },   /* M */
@@ -158,11 +168,22 @@ static void oam_clear_from(unsigned char n) {
     for (i = n; i < 64; ++i) OAM[i * 4] = 0xF0;
 }
 
+/* Animated blue gradient: logo bands use palettes 1-3, each offset in time. */
+static void title_palette(void) {
+    unsigned char p, t = frame >> 2;
+    for (p = 1; p < 4; ++p) {
+        ppu_addr(0x3F00 + p * 4 + 1);
+        PPUDATA = 0x01;
+        PPUDATA = title_blue[(t + p * 3) & 7];
+    }
+}
+
 /* wait for vblank, upload sprites, apply scroll */
 static void present(void) {
     oam_clear_from(oam_n);
     wait_vblank();
     OAMDMA = 2;
+    if (title_anim) title_palette();
     PPUCTRL = (cam >> 8) & 1;
     PPUSCROLL = cam & 0xFF;
     PPUSCROLL = 0;
@@ -188,6 +209,15 @@ static void add_spr16(int sx, int sy, unsigned char base, unsigned char attr, un
     add_spr(sx + 8, sy + 8, base + 2 + r, attr);
 }
 
+/* 24x24 metasprite, 3x3 tiles row-major */
+static void add_spr24(int sx, int sy, unsigned char base, unsigned char attr, unsigned char flip) {
+    unsigned char r, c;
+    if (flip) attr |= 0x40;
+    for (r = 0; r < 3; ++r)
+        for (c = 0; c < 3; ++c)
+            add_spr(sx + c * 8, sy + r * 8, base + r * 3 + (flip ? 2 - c : c), attr);
+}
+
 static void add_text(int sx, int sy, const char *s) {
     while (*s) { if (*s != ' ') add_spr(sx, sy, *s, 0); sx += 8; ++s; }
 }
@@ -204,28 +234,40 @@ static void add_score(unsigned int value) {
 static void sound_off(void) { APU_ON = 0; }
 
 static void sound_start(void) {
-    APU_ON = 0x03;
-    APU_P1 = 0xBF;                 /* 50% duty, medium volume */
+    APU_ON = 0x0F;
+    APU_P1 = 0x43;                 /* 25% duty, short decaying pluck */
     APU_P2 = 0x7F;
+    APU_TRI = 0xC0;
     shot_sound = 0;
 }
 
+/* Bullet: a noise crack plus a fast falling "pew" on pulse 2. */
 static void sound_shoot(void) {
+    APU_NOISE = 0x05;              /* decaying envelope */
+    APU_NZLO = 0x03;
+    APU_NZHI = 0x08;
     APU_P2 = 0x7F;
-    APU_P2LO = 0x50;
+    APU_P2LO = 0x30;
     APU_P2HI = 0x08;
-    shot_sound = 5;
+    shot_sound = 8;
 }
 
 static void sound_update(void) {
     unsigned int note;
+    unsigned char chord = (frame >> 7) & 3;
     if ((frame & 15) == 0) {
-        note = music_notes[(frame >> 4) & 15];
-        if (note) { APU_P1LO = note & 0xFF; APU_P1HI = (note >> 8) & 7; }
-        else APU_P1 = 0x30;
+        note = music_arp[chord][arp_order[(frame >> 4) & 7]];
+        APU_P1 = 0x43;
+        APU_P1LO = note & 0xFF; APU_P1HI = (note >> 8) & 7;
     }
-    if ((frame & 15) == 1) APU_P1 = 0xBF;
-    if (shot_sound && --shot_sound == 0) APU_P2 = 0x30;
+    if ((frame & 127) == 0) {
+        note = music_bass[chord];
+        APU_TRILO = note & 0xFF; APU_TRIHI = (note >> 8) & 7;
+    }
+    if (shot_sound) {
+        APU_P2LO = 0x30 + (8 - shot_sound) * 0x18;
+        if (--shot_sound == 0) APU_P2 = 0x30;
+    }
 }
 
 static unsigned char rnd(void) {
@@ -268,11 +310,22 @@ static void title_screen(void) {
     /* Tile zero uses the universal background colour ($0F: black).  Filling
        the whole name table first guarantees that the title never exposes the
        emulator's power-on grey while the logo is being drawn. */
-    fill_nt(0x2000, 0, 0xFF);
+    fill_nt(0x2000, 0, 0);
     fill_nt(0x2400, 0, 0);
     load_palette();
     for (i = 0; i < 4; ++i) draw_letter(6 + i * 5, 4, meme[i]);
     for (i = 0; i < 5; ++i) draw_letter(3 + i * 5, 11, blitz[i]);
+    /* attributes: logo rows alternate palettes 1-3 every 16 pixels */
+    ppu_addr(0x23C0);
+    for (i = 0; i < 64; ++i) {
+        unsigned char by = i >> 3, top = by * 2, v = 0;
+        if (by >= 1 && by <= 3) {
+            unsigned char a = 1 + top % 3, b = 1 + (top + 1) % 3;
+            v = a | (a << 2) | (b << 4) | (b << 6);
+        }
+        PPUDATA = v;
+    }
+    title_anim = 1;
     put_text(13, 19, "1 PLAYER");
     put_text(13, 21, "2 PLAYERS");
     put_text(11, 25, "PRESS START");
@@ -286,6 +339,7 @@ static void title_screen(void) {
         add_spr(88, 19 * 8 + (nplayers - 1) * 16, T_ARROW, 0);
         present();
     }
+    title_anim = 0;
 }
 
 static void message_screen(const char *l1, const char *l2, unsigned char frames) {
@@ -356,8 +410,8 @@ static void fire_bullet(Player *p, signed char dx, signed char dy) {
     for (i = 0; i < MAX_PB; ++i) {
         if (pb_on[i]) continue;
         pb_on[i] = 1;
-        pb_x[i] = p->face ? p->x - 6 : p->x + 14;
-        pb_y[i] = p->lie ? p->y - 6 : p->y - 13;
+        pb_x[i] = p->face ? p->x - 6 : p->x + 22;
+        pb_y[i] = p->lie ? p->y - 6 : p->y - 15;
         pb_dx[i] = p->face ? -dx : dx;
         pb_dy[i] = dy;
         sound_shoot();
@@ -406,7 +460,7 @@ static void update_player(unsigned char i) {
     if (!p->lie) {
         if (pd & BTN_LEFT) { p->x -= 2; p->face = 1; ++p->step; }
         else if (pd & BTN_RIGHT) { p->x += 2; p->face = 0; ++p->step; }
-        if (ground && (pressed[i] & BTN_A)) p->vy = -8;
+        if (ground && (pressed[i] & BTN_B)) p->vy = -8;
     }
     if (p->x < cam) p->x = cam;
     if (p->x > cam + 232) p->x = cam + 232;
@@ -416,7 +470,7 @@ static void update_player(unsigned char i) {
         if (frame & 1) { if (p->vy < 8) ++p->vy; }
         if (p->y >= GROUND && p->vy >= 0) { p->y = GROUND; p->vy = 0; }
     }
-    player_shoot(p, pressed[i] & BTN_B, pd & BTN_B);
+    player_shoot(p, pressed[i] & BTN_A, pd & BTN_A);
 }
 
 static void update_camera(void) {
@@ -441,7 +495,7 @@ static void update_bullets(void) {
         sx = pb_x[i] - cam;
         if (sx < -8 || sx > 256 || pb_y[i] < 8 || pb_y[i] > 200) { pb_on[i] = 0; continue; }
         for (j = 0; j < MAX_EN; ++j) {
-            if (en_on[j] == 1 && overlap(pb_x[i] + 2, pb_y[i] + 2, 4, 4, en_x[j] + 3, GROUND - 16, 10, 16)) {
+            if (en_on[j] == 1 && overlap(pb_x[i] + 2, pb_y[i] + 2, 4, 4, en_x[j] + 7, GROUND - 24, 10, 24)) {
                 en_on[j] = 2; score += 100 * level_number; pb_on[i] = 0; break;   /* 2 = dying */
             }
         }
@@ -473,7 +527,7 @@ static void update_enemies(void) {
     for (i = 0; i < MAX_EN; ++i) {
         if (en_on[i] == 1) {
             en_x[i] -= en_spd[i];
-            if (en_x[i] < cam - 16) en_on[i] = 0;
+            if (en_x[i] < cam - 24) en_on[i] = 0;
         } else if (en_on[i] >= 2) {
             if (++en_on[i] > 12) en_on[i] = 0;
         }
@@ -511,16 +565,16 @@ static void check_damage(void) {
     for (i = 0; i < 2; ++i) {
         Player *p = &pl[i];
         if (p->state != 1 || p->inv) continue;
-        px = p->x + 4;
-        ph = p->lie ? 8 : 16;
+        px = p->x + (p->face ? 7 : 5);
+        ph = p->lie ? 8 : 24;
         py = p->y - ph;
         for (j = 0; j < MAX_EN; ++j)
-            if (en_on[j] == 1 && overlap(px, py, 8, ph, en_x[j] + 3, GROUND - 16, 10, 16)) kill_player(p);
+            if (en_on[j] == 1 && overlap(px, py, 12, ph, en_x[j] + 7, GROUND - 24, 10, 24)) kill_player(p);
         for (j = 0; j < MAX_BB; ++j)
-            if (bb_on[j] && overlap(px, py, 8, ph, bb_x[j] + 1, bb_y[j] + 1, 6, 6)) kill_player(p);
-        if (boss_on && !boss_dying && overlap(px, py, 8, ph, boss_x + 4, GROUND - 30, 24, 30)) kill_player(p);
+            if (bb_on[j] && overlap(px, py, 12, ph, bb_x[j] + 1, bb_y[j] + 1, 6, 6)) kill_player(p);
+        if (boss_on && !boss_dying && overlap(px, py, 12, ph, boss_x + 4, GROUND - 30, 24, 30)) kill_player(p);
         for (j = 0; j < NUM_PU; ++j)
-            if (pu_state[j] == 1 && overlap(px, py, 8, ph, pu_world_x[j], pu_y[j], 8, 8)) {
+            if (pu_state[j] == 1 && overlap(px, py, 12, ph, pu_world_x[j], pu_y[j], 8, 8)) {
                 p->wpn = j + 1; pu_state[j] = 2;
             }
     }
@@ -544,21 +598,22 @@ static void draw_all(void) {
         if (p->state != 1 || (p->inv & 2)) continue;
         sx = p->x - cam;
         if (p->lie) {
-            add_spr(sx, p->y - 8, T_LIE + (p->face ? 1 : 0), i | (p->face ? 0x40 : 0));
-            add_spr(sx + 8, p->y - 8, T_LIE + (p->face ? 0 : 1), i | (p->face ? 0x40 : 0));
+            unsigned char c;
+            for (c = 0; c < 3; ++c)
+                add_spr(sx + c * 8, p->y - 8, T_LIE + (p->face ? 2 - c : c), i | (p->face ? 0x40 : 0));
         } else {
             base = (p->y < GROUND || ((p->step >> 2) & 1) == 0) ? T_STAND : T_RUN;
             if (p->y < GROUND) base = T_RUN;
-            add_spr16(sx, p->y - 16, base, i, p->face);
+            add_spr24(sx, p->y - 24, base, i, p->face);
         }
     }
     for (i = 0; i < MAX_EN; ++i) {
         if (!en_on[i]) continue;
         sx = en_x[i] - cam;
         if (en_on[i] == 1)
-            add_spr16(sx, GROUND - 16, ((en_x[i] >> 3) & 1) ? T_ENEMY_A : T_ENEMY_B, 2, 0);
+            add_spr24(sx, GROUND - 24, ((en_x[i] >> 3) & 1) ? T_ENEMY_A : T_ENEMY_B, 2, 1);
         else
-            add_spr(sx + 4, GROUND - 12, T_EXPLOSION, 2);
+            add_spr(sx + 8, GROUND - 16, T_EXPLOSION, 2);
     }
     for (i = 0; i < MAX_PB; ++i)
         if (pb_on[i]) add_spr(pb_x[i] - cam, pb_y[i], T_BULLET, 3);
