@@ -10,9 +10,9 @@ build/chr.bin: tools/gen_chr.py
 $(ROM): src/main.c src/chr.s build/chr.bin
 	cl65 -t nes -O -C src/nes.cfg -o $@ src/main.c src/chr.s
 
-# Launch in FCEUX
+# Launch in Mesen
 run: $(ROM)
-	fceux $(ROM)
+	/Applications/Mesen.app/Contents/MacOS/Mesen "$(abspath $(ROM))"
 
 clean:
 	rm -rf build
