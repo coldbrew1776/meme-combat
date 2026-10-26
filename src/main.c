@@ -80,7 +80,7 @@ static Player pl[2];
 static unsigned char pad[2], pressed[2], old_pad[2];
 static unsigned char nplayers;
 static int cam;
-static unsigned char frame, oam_n, rng = 0x5A, title_anim;
+static unsigned char frame, oam_n, rng = 0x5A, title_anim, freeze_frame;
 
 static int pb_x[MAX_PB]; static unsigned char pb_y[MAX_PB];
 static signed char pb_dx[MAX_PB], pb_dy[MAX_PB]; static unsigned char pb_on[MAX_PB];
@@ -188,7 +188,7 @@ static void present(void) {
     PPUSCROLL = cam & 0xFF;
     PPUSCROLL = 0;
     oam_n = 0;
-    ++frame;
+    if (!freeze_frame) ++frame;
 }
 
 static void add_spr(int sx, int sy, unsigned char tile, unsigned char attr) {
@@ -655,6 +655,23 @@ static void draw_all(void) {
 
 /* -------------------------------------------------------------- level --- */
 
+/* Pause uses edge-triggered Start input, so holding Start when pausing does
+   not immediately resume the game.  Rendering continues while frame-based
+   game state and audio remain frozen. */
+static void pause_game(void) {
+    freeze_frame = 1;
+    sound_off();
+    for (;;) {
+        read_pads();
+        if ((pressed[0] | pressed[1]) & BTN_START) break;
+        draw_all();
+        add_text(104, 104, "PAUSED");
+        present();
+    }
+    freeze_frame = 0;
+    sound_start();
+}
+
 /* returns 1 if the level was cleared, 0 on game over */
 static unsigned char play_level(void) {
     unsigned char i;
@@ -665,6 +682,10 @@ static unsigned char play_level(void) {
     screen_on();
     for (;;) {
         read_pads();
+        if ((pressed[0] | pressed[1]) & BTN_START) {
+            pause_game();
+            continue;
+        }
         for (i = 0; i < 2; ++i) update_player(i);
         update_camera();
         update_bullets();
