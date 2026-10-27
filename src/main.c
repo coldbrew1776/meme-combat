@@ -36,9 +36,12 @@
 #define BTN_RIGHT 0x01
 
 /* tile numbers (keep in sync with tools/gen_chr.py) */
-#define T_STAND 0x70
-#define T_RUN 0x79
-#define T_LIE 0x82
+#define T_CHOMP_IDLE_A 0x70
+#define T_CHOMP_IDLE_B 0x79
+#define T_CHOMP_WALK_A 0x82
+#define T_CHOMP_WALK_B 0xC0
+#define T_CHOMP_JUMP 0xC9
+#define T_CHOMP_ATTACK 0xD2
 #define T_BULLET 11
 #define T_ENEMY_A 0x85
 #define T_ENEMY_B 0x8E
@@ -75,6 +78,8 @@ typedef struct {
     unsigned char wpn;      /* 0 normal, 1 spread, 2 rapid */
     unsigned char cool;
     unsigned char step;
+    unsigned char moving;
+    unsigned char attack;
     unsigned char jump_buffer, coyote;
 } Player;
 
@@ -83,6 +88,8 @@ static unsigned char pad[2], pressed[2], old_pad[2];
 static unsigned char nplayers;
 static int cam;
 static unsigned char frame, oam_n, rng = 0x5A, title_anim, freeze_frame;
+/* Advanced by game logic, rather than by rendering, for stable animation. */
+static unsigned char anim_timer;
 
 static int pb_x[MAX_PB]; static unsigned char pb_y[MAX_PB];
 static signed char pb_dx[MAX_PB], pb_dy[MAX_PB]; static unsigned char pb_on[MAX_PB];
@@ -443,7 +450,7 @@ static unsigned char overlap(int ax, int ay, int aw, int ah, int bx, int by, int
 
 static void new_game(void) {
     unsigned char i;
-    cam = 0; frame = 0; spawn_t = 60; score = 0;
+    cam = 0; frame = anim_timer = 0; spawn_t = 60; score = 0;
     boss_on = boss_dying = 0; boss_hp = BOSS_HP; boss_flash = 0; boss_shot = 0; boss_y = 136;
     for (i = 0; i < MAX_PB; ++i) pb_on[i] = 0;
     for (i = 0; i < MAX_BB; ++i) bb_on[i] = 0;
@@ -452,7 +459,8 @@ static void new_game(void) {
     for (i = 0; i < 2; ++i) {
         pl[i].x = 24 + i * 24; pl[i].y = GROUND; pl[i].vy = 0; pl[i].face = 0;
         pl[i].lie = 0; pl[i].lives = 3; pl[i].timer = 0; pl[i].inv = 60;
-        pl[i].wpn = 0; pl[i].cool = 0; pl[i].step = 0; pl[i].jump_buffer = pl[i].coyote = 0;
+        pl[i].wpn = 0; pl[i].cool = 0; pl[i].step = 0; pl[i].moving = pl[i].attack = 0;
+        pl[i].jump_buffer = pl[i].coyote = 0;
         pl[i].state = (i < nplayers) ? 1 : 0;
     }
 }
@@ -476,13 +484,13 @@ static void player_shoot(Player *p, unsigned char btn_pressed, unsigned char btn
     if (p->cool) return;
     if (p->wpn == 2) {
         if (!btn_held) return;
-        fire_bullet(p, 6, 0); p->cool = 5;
+        fire_bullet(p, 6, 0); p->cool = 5; p->attack = 7;
     } else if (btn_pressed) {
         if (p->wpn == 1) {
             fire_bullet(p, 6, -2); fire_bullet(p, 6, 0); fire_bullet(p, 6, 2);
-            p->cool = 12;
+            p->cool = 12; p->attack = 9;
         } else {
-            fire_bullet(p, 6, 0); p->cool = 8;
+            fire_bullet(p, 6, 0); p->cool = 8; p->attack = 9;
         }
     }
 }
@@ -519,6 +527,8 @@ static void update_player(unsigned char i) {
     }
     if (p->state == 0) return;
     if (p->inv) --p->inv;
+    if (p->attack) --p->attack;
+    p->moving = 0;
     floor = platform_floor(p->x + 12);
     ground = (p->y == floor);
     /* Keep a short input buffer and a few frames of grace after an edge.
@@ -529,8 +539,8 @@ static void update_player(unsigned char i) {
     else if (p->coyote) --p->coyote;
     p->lie = ground && (pd & BTN_DOWN);
     if (!p->lie) {
-        if (pd & BTN_LEFT) { p->x -= 3; p->face = 1; ++p->step; }
-        else if (pd & BTN_RIGHT) { p->x += 3; p->face = 0; ++p->step; }
+        if (pd & BTN_LEFT) { p->x -= 3; p->face = 1; ++p->step; p->moving = 1; }
+        else if (pd & BTN_RIGHT) { p->x += 3; p->face = 0; ++p->step; p->moving = 1; }
         floor = platform_floor(p->x + 12);
         ground = (p->y == floor);
         /* A is the only jump input; B is passed exclusively to shooting. */
@@ -644,16 +654,18 @@ static void check_damage(void) {
     for (i = 0; i < 2; ++i) {
         Player *p = &pl[i];
         if (p->state != 1 || p->inv) continue;
-        px = p->x + (p->face ? 7 : 5);
-        ph = p->lie ? 8 : 24;
+        /* Chomp is rounder than the former soldier: keep collisions inside
+           its visible blue body instead of its transparent tail and bite. */
+        px = p->x + 4;
+        ph = p->lie ? 18 : 21;
         py = p->y - ph;
         for (j = 0; j < MAX_EN; ++j)
-            if (en_on[j] == 1 && overlap(px, py, 12, ph, en_x[j] + 7, GROUND - 24, 10, 24)) kill_player(p);
+            if (en_on[j] == 1 && overlap(px, py, 16, ph, en_x[j] + 7, GROUND - 24, 10, 24)) kill_player(p);
         for (j = 0; j < MAX_BB; ++j)
-            if (bb_on[j] && overlap(px, py, 12, ph, bb_x[j] + 1, bb_y[j] + 1, 6, 6)) kill_player(p);
-        if (boss_on && !boss_dying && overlap(px, py, 12, ph, boss_x + 4, boss_y + 3, 32, 36)) kill_player(p);
+            if (bb_on[j] && overlap(px, py, 16, ph, bb_x[j] + 1, bb_y[j] + 1, 6, 6)) kill_player(p);
+        if (boss_on && !boss_dying && overlap(px, py, 16, ph, boss_x + 4, boss_y + 3, 32, 36)) kill_player(p);
         for (j = 0; j < NUM_PU; ++j)
-            if (pu_state[j] == 1 && overlap(px, py, 12, ph, pu_world_x[j], pu_y[j], 16, 16)) {
+            if (pu_state[j] == 1 && overlap(px, py, 16, ph, pu_world_x[j], pu_y[j], 16, 16)) {
                 p->wpn = j + 1; pu_state[j] = 2;
             }
     }
@@ -676,24 +688,22 @@ static void draw_all(void) {
         Player *p = &pl[i];
         if (p->state == 2 && p->timer > 6 && (p->timer > 24 || (p->timer & 2))) {
             /* death: tumble up, fall, then lie flat and blink out */
-            unsigned char t = 70 - p->timer, c;
+            unsigned char t = 70 - p->timer;
             int dy = (t < 24) ? (int)t * (24 - t) / 8 : 0;
             unsigned char fl = (t < 24) ? 0x80 : 0;
             sx = p->x - cam;
-            for (c = 0; c < 3; ++c)
-                add_spr(sx + c * 8, p->y - 8 - dy, T_LIE + (p->face ? 2 - c : c),
-                        i | fl | (p->face ? 0x40 : 0));
+            add_spr24(sx, p->y - 24 - dy, T_CHOMP_IDLE_A, i | fl, p->face);
             continue;
         }
         if (p->state != 1 || (p->inv & 2)) continue;
         sx = p->x - cam;
         if (p->lie) {
-            unsigned char c;
-            for (c = 0; c < 3; ++c)
-                add_spr(sx + c * 8, p->y - 8, T_LIE + (p->face ? 2 - c : c), i | (p->face ? 0x40 : 0));
+            add_spr24(sx, p->y - 20, T_CHOMP_IDLE_B, i, p->face);
         } else {
-            base = (p->y < GROUND || ((p->step >> 2) & 1) == 0) ? T_STAND : T_RUN;
-            if (p->y < GROUND) base = T_RUN;
+            if (p->attack) base = T_CHOMP_ATTACK;
+            else if (p->vy) base = T_CHOMP_JUMP;
+            else if (p->moving) base = ((anim_timer >> 3) & 1) ? T_CHOMP_WALK_A : T_CHOMP_WALK_B;
+            else base = ((anim_timer >> 4) & 1) ? T_CHOMP_IDLE_A : T_CHOMP_IDLE_B;
             add_spr24(sx, p->y - 24, base, i, p->face);
         }
     }
@@ -775,6 +785,7 @@ static unsigned char play_level(void) {
             pause_game();
             continue;
         }
+        ++anim_timer;
         for (i = 0; i < 2; ++i) update_player(i);
         update_camera();
         update_bullets();
