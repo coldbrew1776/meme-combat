@@ -105,9 +105,64 @@ def lying(enemy):
     return ["".join(str(v) for v in r) for r in g]
 
 
-STAND = soldier(False, False)
-RUN = soldier(True, False)
-LIE = lying(False)
+# Chomp is drawn as a compact, three-colour 24x24 metasprite.  Dots are
+# transparent, which makes the outline read cleanly against every backdrop.
+# The small variations deliberately use the same NES palette: idle bobs its
+# fin, walk shifts its tail, jump stretches upward, and attack opens a big
+# bite at the nose.
+def chomp_frame(kind):
+    g = canvas(24, 24)
+    lift = 1 if kind == "idle_b" else 0
+    # Rounded blue body, tapering into Chomp's pointed nose on the right.
+    for y in range(3 - lift, 20 - lift):
+        yy = y + lift
+        half = 8 - abs(yy - 11) // 2
+        left = 10 - half
+        right = 15 + (3 if 7 <= yy <= 15 else 0)
+        for x in range(max(0, left), min(23, right) + 1):
+            g[y][x] = 3 if x in (left, right) or y in (3 - lift, 19 - lift) else (2 if x > 9 else 1)
+    # A swept tail and dorsal fin make the logo silhouette recognizable.
+    tail_shift = -1 if kind == "walk_b" else 0
+    for y in range(8 - lift, 17 - lift):
+        x = 4 + (y - (8 - lift)) // 2 + tail_shift
+        if 0 <= x < 24:
+            g[y][x] = 3
+            if x > 0: g[y][x - 1] = 2
+    for y in range(1 - lift, 7 - lift):
+        for x in range(8, 13 - y + lift):
+            if 0 <= y < 24: g[y][x] = 3 if x == 8 or y == 1 - lift else 2
+    # White eye and a dark pupil.
+    g[8 - lift][15] = g[8 - lift][16] = 3
+    g[9 - lift][16] = 1
+    # The mouth is the defining animation: closed at rest, opening while
+    # walking, and a wide, obvious chomp while firing.
+    mouth_y = 14 - lift
+    if kind == "attack":
+        for y in range(11 - lift, 18 - lift):
+            start = 15 + abs(y - (14 - lift)) // 2
+            for x in range(start, 24): g[y][x] = 0
+        for x in range(15, 23):
+            g[10 - lift][x] = 3
+            g[18 - lift][x] = 3
+        g[11 - lift][22] = g[17 - lift][22] = 3
+    else:
+        for x in range(15, 22): g[mouth_y][x] = 1
+        if kind == "walk_b":
+            for x in range(17, 22): g[mouth_y + 1][x] = 0
+    if kind == "jump":
+        # Vertical motion gets a taller dorsal fin and a tucked tail.
+        for y in range(0, 4):
+            for x in range(9, 14 - y): g[y][x] = 3 if x == 9 else 2
+        rect(g, 3, 15, 7, 17, 2)
+    return ["".join(str(v) for v in r) for r in g]
+
+
+CHOMP_IDLE_A = chomp_frame("idle_a")
+CHOMP_IDLE_B = chomp_frame("idle_b")
+CHOMP_WALK_A = chomp_frame("walk_a")
+CHOMP_WALK_B = chomp_frame("walk_b")
+CHOMP_JUMP = chomp_frame("jump")
+CHOMP_ATTACK = chomp_frame("attack")
 ENEMY_A = soldier(False, True)
 ENEMY_B = soldier(True, True)
 # A 16x16 supply crate is deliberately a generous target and remains a
@@ -129,13 +184,18 @@ ARROW = ["..3.....", "..33....", "..333...", "..3333..", "..333...", "..33....",
          "..3.....", "........"]
 
 # tile numbers (keep in sync with src/main.c)
-T_STAND, T_RUN, T_LIE, T_BULLET = 0x70, 0x79, 0x82, 11
+T_CHOMP_IDLE_A, T_CHOMP_IDLE_B, T_CHOMP_WALK_A = 0x70, 0x79, 0x82
+T_CHOMP_WALK_B, T_CHOMP_JUMP, T_CHOMP_ATTACK = 0xC0, 0xC9, 0xD2
+T_BULLET = 11
 T_ENEMY_A, T_ENEMY_B, T_CAPSULE, T_BOSS = 0x85, 0x8E, 0x98, 0xA0
 T_BOSS_BULLET, T_EXPLOSION, T_ARROW = 37, 38, 42
 
-blit(STAND, T_STAND, 3)
-blit(RUN, T_RUN, 3)
-blit(LIE, T_LIE, 3)
+blit(CHOMP_IDLE_A, T_CHOMP_IDLE_A, 3)
+blit(CHOMP_IDLE_B, T_CHOMP_IDLE_B, 3)
+blit(CHOMP_WALK_A, T_CHOMP_WALK_A, 3)
+blit(CHOMP_WALK_B, T_CHOMP_WALK_B, 3)
+blit(CHOMP_JUMP, T_CHOMP_JUMP, 3)
+blit(CHOMP_ATTACK, T_CHOMP_ATTACK, 3)
 blit(BULLET, T_BULLET, 1)
 blit(ENEMY_A, T_ENEMY_A, 3)
 blit(ENEMY_B, T_ENEMY_B, 3)
