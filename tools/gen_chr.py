@@ -39,56 +39,52 @@ def rect(g, x0, y0, x1, y1, c):
 
 
 def soldier(run, enemy):
-    """24x24 soldier facing right; the rifle ends on the last column."""
+    """A shaded 24x24 commando; the original human combatants, redrawn."""
     g = canvas(24, 24)
+    # Helmet, brim, face, eye, and chin create a readable human profile.
+    rect(g, 7, 1, 13, 1, 1)
+    rect(g, 5, 2, 15, 3, 1)
+    rect(g, 4, 4, 16, 4, 3)              # helmet rim / enemy beret band
+    rect(g, 6, 5, 14, 8, 2)
+    rect(g, 7, 8, 13, 9, 2)
+    g[6][13] = g[6][14] = 1              # brow and eye
+    g[8][14] = 1                         # nose
+    g[9][11] = g[9][12] = 1              # jaw shadow
+    # The opposing soldier has a cap badge and a darker collar; silhouette
+    # remains deliberately human rather than the recent alien replacement.
     if enemy:
-        # Tall monochrome invader: dome, antennae, huge eyes and tentacles.
-        rect(g, 10, 0, 11, 2, 3)
-        g[0][8] = g[0][13] = 3
-        rect(g, 5, 3, 18, 5, 3)
-        rect(g, 3, 6, 20, 14, 2)
-        rect(g, 5, 5, 18, 16, 3)
-        rect(g, 6, 7, 10, 12, 1)
-        rect(g, 14, 7, 18, 12, 1)
-        rect(g, 7, 8, 9, 10, 3)
-        rect(g, 15, 8, 17, 10, 3)
-        rect(g, 8, 14, 16, 15, 1)
-        rect(g, 4, 15, 20, 18, 2)
-        for x in (5, 9, 14, 18):
-            rect(g, x, 19, x + 1, 22, 3)
-            g[23][x - 1] = g[23][x] = g[23][x + 1] = 3
-        return ["".join(str(v) for v in r) for r in g]
-    rect(g, 7, 0, 14, 2, 1)             # helmet / hair
-    rect(g, 6, 2, 15, 3, 1)
-    if not enemy:
-        rect(g, 6, 4, 15, 8, 2)         # fuller face
-    rect(g, 7, 4, 14, 8, 2)             # face
-    rect(g, 8, 9, 13, 9, 2)             # neck
-    if not enemy:
-        rect(g, 6, 3, 15, 3, 3)         # headband
-        g[5][12] = g[5][13] = 1         # eye
-        rect(g, 11, 7, 14, 7, 1)        # smirk
-    t = 0 if enemy else 1               # the hero is built a little thicker
-    rect(g, 5 - t, 10, 16 + t, 16, 3)   # torso
-    rect(g, 5 - t, 10, 16 + t, 10, 1)   # collar
-    rect(g, 5 - t, 15, 16 + t, 16, 1)   # belt
-    g[15][10] = g[15][11] = 3           # buckle
-    rect(g, 2 - t, 11, 5 - t, 15, 2)    # rear arm
-    rect(g, 16 + t, 11, 18 + t, 14, 2)  # front arm
-    rect(g, 17 + t, 11, 23, 12, 1)      # rifle barrel
-    rect(g, 16 + t, 13, 20, 14, 1)      # rifle body
-    g[11][22] = 3
-    if run:
-        for y in range(17, 24):
-            x = 9 - (y - 17)
-            rect(g, x - t, y, x + 2 + t, y, 3 if y == 23 else 1)
-            x = 12 + (y - 17)
-            rect(g, x - t, y, x + 2 + t, y, 3 if y == 23 else 1)
+        g[3][9] = g[3][10] = 3
+        rect(g, 7, 10, 14, 11, 1)
     else:
-        rect(g, 6 - t, 17, 9, 22, 1)
-        rect(g, 12, 17, 15 + t, 22, 1)
-        rect(g, 5 - t, 23, 10, 23, 3)
-        rect(g, 11, 23, 16 + t, 23, 3)
+        rect(g, 4, 3, 6, 3, 3)           # hero's bandana tail
+        g[2][14] = 3
+        rect(g, 7, 10, 14, 11, 3)
+    # Layered vest, belt, hands, rifle stock, receiver, and barrel.
+    rect(g, 6, 11, 15, 16, 1)
+    rect(g, 7, 12, 14, 15, 3)
+    rect(g, 8, 12, 10, 14, 2)            # chest highlight
+    rect(g, 6, 16, 15, 17, 1)
+    rect(g, 2, 12, 5, 15, 1)
+    rect(g, 3, 14, 6, 16, 2)
+    rect(g, 15, 11, 18, 14, 2)
+    rect(g, 17, 11, 22, 12, 1)
+    rect(g, 16, 13, 20, 15, 1)
+    rect(g, 18, 13, 20, 13, 3)
+    g[11][22] = 3
+    # Distinct leg poses give the restored protagonist and enemies real
+    # running weight rather than the former flat, symmetric blocks.
+    if run:
+        rect(g, 7, 18, 10, 19, 1)
+        rect(g, 5, 20, 8, 21, 1)
+        rect(g, 3, 22, 7, 23, 3)
+        rect(g, 12, 18, 15, 19, 1)
+        rect(g, 14, 20, 17, 21, 1)
+        rect(g, 16, 22, 21, 23, 3)
+    else:
+        rect(g, 7, 18, 10, 22, 1)
+        rect(g, 12, 18, 15, 22, 1)
+        rect(g, 5, 23, 10, 23, 3)
+        rect(g, 11, 23, 16, 23, 3)
     return ["".join(str(v) for v in r) for r in g]
 
 
@@ -105,100 +101,9 @@ def lying(enemy):
     return ["".join(str(v) for v in r) for r in g]
 
 
-# Chomp is a hand-pixelled version of the supplied mark.  The heavy navy
-# contour, bright cyan crown, white cheek, and broad dark smile preserve the
-# distinctive mascot silhouette at NES resolution. Dots are transparent.
-# Animation changes the jaw, fins, and body weight instead of redrawing a
-# generic creature, so every frame remains recognisably Chomp.
-def chomp_frame(kind):
-    g = canvas(24, 24)
-    # The body is built from a controlled silhouette instead of a circle: a
-    # raised crown, swept rear fin, forward crest and soft white lower jaw.
-    outline = (
-        ".........333..........",
-        ".......33333.........3",
-        "......3322233......333",
-        ".....332222233....332.",
-        "....33222222233..332..",
-        "...3322222222233332...",
-        "..3322222222222232....",
-        ".33222222222222223....",
-        "3322222222222222233...",
-        "32222222222222222233..",
-        "322222222222222222233.",
-        "3222222222222222222233",
-        ".322222222222222222223",
-        "..32222222222222222223",
-        "...3222222222222222223",
-        "....322222222222222223",
-        ".....32222222222222223",
-        "......3222222222222223",
-        ".......333333333333333",
-        "........333333333333..",
-        "..........33333333....",
-        "........................",
-        "........................",
-        "........................",
-    )
-    for y, row in enumerate(outline):
-        for x, c in enumerate(row):
-            if c != ".": g[y][x] = int(c)
-    # Blue shading follows the round crown and the nose rather than making a
-    # flat slab of colour.  Palette colour 1 is the dark ink/blue shadow.
-    for y in range(5, 16):
-        for x in range(3, 10):
-            if g[y][x] == 2: g[y][x] = 1
-    for y in range(7, 10):
-        for x in range(11, 16):
-            if g[y][x] == 2: g[y][x] = 3
-    # Big white logo cheek and a crisp navy eye.
-    for y, x0, x1 in ((10, 15, 18), (11, 14, 20), (12, 14, 21), (13, 15, 21)):
-        for x in range(x0, x1 + 1): g[y][x] = 3
-    g[7][15] = g[7][16] = 3
-    g[8][16] = 1
-    # Smile is deliberately broad and curved, with a white lower lip.
-    for y, x0 in ((14, 14), (15, 15), (16, 16)):
-        for x in range(x0, 23): g[y][x] = 1
-    for x in range(17, 22): g[17][x] = 3
-    # A little rear flipper stops the body reading as an oval at a glance.
-    for y, x0 in ((13, 3), (14, 2), (15, 1), (16, 2), (17, 4)):
-        for x in range(x0, x0 + 4): g[y][x] = 2 if x > x0 else 3
-
-    if kind == "idle_b":
-        # Blink and a one-pixel crown bob provide an unobtrusive resting loop.
-        g[7][15] = g[7][16] = 1
-        for x in range(9, 14):
-            if g[1][x]: g[0][x] = g[1][x]
-    elif kind == "walk_b":
-        # Open the smile and kick the rear flipper forward for the stride.
-        for x in range(17, 23): g[15][x] = 0
-        for x in range(18, 22): g[16][x] = 0
-        for y in range(14, 18):
-            g[y][max(0, y - 14)] = 3
-    elif kind == "jump":
-        # Stretch the crown and tuck the flipper during the ascent.
-        for y in range(0, 4):
-            for x in range(10 - y // 2, 14):
-                g[y][x] = 2 if x > 10 - y // 2 else 3
-        for y in range(15, 18):
-            for x in range(1, 6): g[y][x] = 0
-    elif kind == "attack":
-        # The firing pose is the mascot's largest, cleanest chomp.
-        for y in range(13, 19):
-            for x in range(15 + abs(y - 16), 24): g[y][x] = 0
-        for x in range(15, 23):
-            g[12][x] = 3
-            g[19][x] = 3
-        g[13][22] = g[18][22] = 3
-    return ["".join(str(v) for v in r) for r in g]
-
-
-CHOMP_IDLE_A = chomp_frame("idle_a")
-CHOMP_IDLE_B = chomp_frame("idle_b")
-CHOMP_WALK_A = chomp_frame("walk_a")
-CHOMP_WALK_B = chomp_frame("walk_b")
-CHOMP_JUMP = chomp_frame("jump")
-CHOMP_ATTACK = chomp_frame("attack")
+STAND = soldier(False, False)
+RUN = soldier(True, False)
+LIE = lying(False)
 ENEMY_A = soldier(False, True)
 ENEMY_B = soldier(True, True)
 # A 16x16 supply crate is deliberately a generous target and remains a
@@ -220,18 +125,14 @@ ARROW = ["..3.....", "..33....", "..333...", "..3333..", "..333...", "..33....",
          "..3.....", "........"]
 
 # tile numbers (keep in sync with src/main.c)
-T_CHOMP_IDLE_A, T_CHOMP_IDLE_B, T_CHOMP_WALK_A = 0x62, 0x6B, 0x74
-T_CHOMP_WALK_B, T_CHOMP_JUMP, T_CHOMP_ATTACK = 0x7D, 0xC0, 0xC9
+T_STAND, T_RUN, T_LIE = 0x62, 0x6B, 0x74
 T_BULLET = 11
-T_ENEMY_A, T_ENEMY_B, T_CAPSULE, T_BOSS = 0x86, 0x8F, 0x98, 0xA0
+T_ENEMY_A, T_ENEMY_B, T_CAPSULE, T_BOSS = 0x7D, 0x86, 0x98, 0xA0
 T_BOSS_BULLET, T_EXPLOSION, T_ARROW = 37, 38, 42
 
-blit(CHOMP_IDLE_A, T_CHOMP_IDLE_A, 3)
-blit(CHOMP_IDLE_B, T_CHOMP_IDLE_B, 3)
-blit(CHOMP_WALK_A, T_CHOMP_WALK_A, 3)
-blit(CHOMP_WALK_B, T_CHOMP_WALK_B, 3)
-blit(CHOMP_JUMP, T_CHOMP_JUMP, 3)
-blit(CHOMP_ATTACK, T_CHOMP_ATTACK, 3)
+blit(STAND, T_STAND, 3)
+blit(RUN, T_RUN, 3)
+blit(LIE, T_LIE, 3)
 blit(BULLET, T_BULLET, 1)
 blit(ENEMY_A, T_ENEMY_A, 3)
 blit(ENEMY_B, T_ENEMY_B, 3)

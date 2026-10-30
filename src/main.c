@@ -36,15 +36,12 @@
 #define BTN_RIGHT 0x01
 
 /* tile numbers (keep in sync with tools/gen_chr.py) */
-#define T_CHOMP_IDLE_A 0x62
-#define T_CHOMP_IDLE_B 0x6B
-#define T_CHOMP_WALK_A 0x74
-#define T_CHOMP_WALK_B 0x7D
-#define T_CHOMP_JUMP 0xC0
-#define T_CHOMP_ATTACK 0xC9
+#define T_STAND 0x62
+#define T_RUN 0x6B
+#define T_LIE 0x74
 #define T_BULLET 11
-#define T_ENEMY_A 0x86
-#define T_ENEMY_B 0x8F
+#define T_ENEMY_A 0x7D
+#define T_ENEMY_B 0x86
 #define T_CAPSULE 0x98
 #define T_BOSS 0xA0
 #define T_BOSS_BULLET 37
@@ -697,18 +694,16 @@ static void draw_all(void) {
             int dy = (t < 24) ? (int)t * (24 - t) / 8 : 0;
             unsigned char fl = (t < 24) ? 0x80 : 0;
             sx = p->x - cam;
-            add_spr24(sx, p->y - 24 - dy, T_CHOMP_IDLE_A, i | fl, p->face);
+            add_spr24(sx, p->y - 24 - dy, T_STAND, i | fl, p->face);
             continue;
         }
         if (p->state != 1 || (p->inv & 2)) continue;
         sx = p->x - cam;
         if (p->lie) {
-            add_spr24(sx, p->y - 20, T_CHOMP_IDLE_B, i, p->face);
+            add_spr24(sx, p->y - 20, T_LIE, i, p->face);
         } else {
-            if (p->attack) base = T_CHOMP_ATTACK;
-            else if (p->vy) base = T_CHOMP_JUMP;
-            else if (p->moving) base = ((anim_timer >> 3) & 1) ? T_CHOMP_WALK_A : T_CHOMP_WALK_B;
-            else base = ((anim_timer >> 4) & 1) ? T_CHOMP_IDLE_A : T_CHOMP_IDLE_B;
+            if (p->moving) base = ((anim_timer >> 3) & 1) ? T_RUN : T_STAND;
+            else base = T_STAND;
             add_spr24(sx, p->y - 24, base, i, p->face);
         }
     }
