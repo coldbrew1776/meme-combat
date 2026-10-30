@@ -5,7 +5,10 @@ Usage: gen_chr.py OUTPUT.chr
 The same 4K tile set is written to both pattern tables (sprites and
 background), so tile numbers mean the same thing everywhere.
 """
+import os
+import struct
 import sys
+import zlib
 
 tiles = {}  # tile index -> 8x8 list of pixel values 0..3
 
@@ -114,9 +117,10 @@ PACKAGE = [
     "3213222222223123", "3213222222223123", "3213222222223123", "3213222222223123",
     "3213333333333123", "3211111111111123", ".322222222222223.", "..333333333333..",
 ]
-# A tighter 4x4 shot leaves more space between the action than the old orb.
-BULLET = ["........", "........", "..3333..", "..3223..", "..3223..", "..3333..",
-          "........", "........"]
+# A compact circular shot leaves space between the action without reading as a
+# square block at NES resolution.
+BULLET = ["...33...", "..3333..", ".332233.", ".322223.", ".322223.", ".332233.",
+          "..3333..", "...33..."]
 BOSS_BULLET = ["........", ".222222.", ".233332.", ".233332.", ".233332.", ".233332.",
                ".222222.", "........"]
 EXPLOSION = ["...33...", ".3.33.3.", "..3223..", "33222233", "33222233", "..3223..",
@@ -166,6 +170,106 @@ def boss_art():
 
 
 blit(boss_art(), T_BOSS, 5)
+
+# ---- editable sprite source ------------------------------------------------
+# Sprites live in a single transparent true-colour PNG so they can be adjusted
+# in ordinary image editors.  The converter accepts RGB or RGBA PNGs; use the
+# four colours documented in assets/README.md.  A one-pixel change maps
+# directly to one NES pixel, so no resampling is involved.
+SPRITE_SHEET = os.path.join(os.path.dirname(__file__), "..", "assets", "sprites.png")
+COLOURS = {0: (0, 0, 0, 0), 1: (17, 17, 17, 255),
+           2: (119, 119, 119, 255), 3: (255, 255, 255, 255)}
+COLOUR_VALUES = {rgb[:3]: value for value, rgb in COLOURS.items() if value}
+
+
+def png_rows(path):
+    """Read a non-interlaced RGB/RGBA PNG without requiring external modules."""
+    data = open(path, "rb").read()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("not a PNG file")
+    pos = 8
+    chunks = []
+    while pos < len(data):
+        size = struct.unpack(">I", data[pos:pos + 4])[0]
+        kind = data[pos + 4:pos + 8]
+        body = data[pos + 8:pos + 8 + size]
+        pos += size + 12
+        chunks.append((kind, body))
+    header = next(body for kind, body in chunks if kind == b"IHDR")
+    width, height, depth, colour, compression, filtering, interlace = struct.unpack(">IIBBBBB", header)
+    if depth != 8 or colour not in (2, 6) or compression or filtering or interlace:
+        raise ValueError("sprites.png must be a non-interlaced 8-bit RGB or RGBA PNG")
+    bpp = 4 if colour == 6 else 3
+    raw = zlib.decompress(b"".join(body for kind, body in chunks if kind == b"IDAT"))
+    stride = width * bpp
+    rows, previous, offset = [], [0] * stride, 0
+    for _ in range(height):
+        mode = raw[offset]
+        source = list(raw[offset + 1:offset + 1 + stride])
+        offset += stride + 1
+        row = [0] * stride
+        for x, value in enumerate(source):
+            left = row[x - bpp] if x >= bpp else 0
+            above = previous[x]
+            upper_left = previous[x - bpp] if x >= bpp else 0
+            if mode == 1: value = (value + left) & 255
+            elif mode == 2: value = (value + above) & 255
+            elif mode == 3: value = (value + ((left + above) >> 1)) & 255
+            elif mode == 4:
+                p, pa, pb, pc = left + above - upper_left, 0, 0, 0
+                pa, pb, pc = abs(p - left), abs(p - above), abs(p - upper_left)
+                value = (value + (left if pa <= pb and pa <= pc else above if pb <= pc else upper_left)) & 255
+            elif mode != 0: raise ValueError("sprites.png uses an unsupported PNG filter")
+            row[x] = value
+        rows.append(row)
+        previous = row
+    return width, height, bpp, rows
+
+
+def sprite_value(row, x, bpp):
+    pixel = row[x * bpp:x * bpp + bpp]
+    if bpp == 4 and pixel[3] == 0:
+        return 0
+    try:
+        return COLOUR_VALUES[tuple(pixel[:3])]
+    except KeyError:
+        raise ValueError("sprites.png has a pixel outside the documented four-colour palette")
+
+
+def import_sprite_sheet(path):
+    width, height, bpp, rows = png_rows(path)
+    if (width, height) != (128, 64):
+        raise ValueError("sprites.png must be exactly 128x64 pixels")
+    regions = ((T_STAND, 0, 0, 3, 3), (T_RUN, 24, 0, 3, 3),
+               (T_LIE, 48, 0, 3, 1), (T_ENEMY_A, 72, 0, 3, 3),
+               (T_ENEMY_B, 96, 0, 3, 3), (T_BULLET, 0, 24, 1, 1),
+               (T_BOSS_BULLET, 8, 24, 1, 1), (T_EXPLOSION, 16, 24, 1, 1),
+               (T_ARROW, 24, 24, 1, 1), (T_CAPSULE, 32, 24, 2, 2),
+               (T_BOSS, 48, 24, 5, 5))
+    for base, left, top, w_tiles, h_tiles in regions:
+        for y in range(h_tiles * 8):
+            for x in range(w_tiles * 8):
+                tile(base + (y // 8) * w_tiles + x // 8)[y % 8][x % 8] = sprite_value(rows[top + y], left + x, bpp)
+
+
+def write_sprite_sheet(path):
+    width, height = 128, 64
+    pixels = [[0] * width for _ in range(height)]
+    regions = ((T_STAND, 0, 0, 3, 3), (T_RUN, 24, 0, 3, 3),
+               (T_LIE, 48, 0, 3, 1), (T_ENEMY_A, 72, 0, 3, 3),
+               (T_ENEMY_B, 96, 0, 3, 3), (T_BULLET, 0, 24, 1, 1),
+               (T_BOSS_BULLET, 8, 24, 1, 1), (T_EXPLOSION, 16, 24, 1, 1),
+               (T_ARROW, 24, 24, 1, 1), (T_CAPSULE, 32, 24, 2, 2),
+               (T_BOSS, 48, 24, 5, 5))
+    for base, left, top, w_tiles, h_tiles in regions:
+        for y in range(h_tiles * 8):
+            for x in range(w_tiles * 8):
+                pixels[top + y][left + x] = tile(base + (y // 8) * w_tiles + x // 8)[y % 8][x % 8]
+    raw = b"".join(b"\0" + b"".join(bytes(COLOURS[value]) for value in row) for row in pixels)
+    chunk = lambda kind, body: struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body) & 0xffffffff)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "wb") as output:
+        output.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
 
 # ---- font (3x5, ASCII-indexed so tile == character code) -------------------
 FONT = {
@@ -245,6 +349,14 @@ def encode(t):
 
 
 bank = bytearray(4096)
+if len(sys.argv) == 3 and sys.argv[1] == "--export-sprites":
+    write_sprite_sheet(sys.argv[2])
+    sys.exit(0)
+if len(sys.argv) != 2:
+    raise SystemExit("usage: gen_chr.py OUTPUT.chr | --export-sprites OUTPUT.png")
+if not os.path.exists(SPRITE_SHEET):
+    raise SystemExit("missing editable sprite sheet: " + SPRITE_SHEET)
+import_sprite_sheet(SPRITE_SHEET)
 for i, t in tiles.items():
     bank[i * 16:i * 16 + 16] = encode(t)
 with open(sys.argv[1], "wb") as f:
