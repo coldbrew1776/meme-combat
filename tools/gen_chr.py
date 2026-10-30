@@ -105,55 +105,91 @@ def lying(enemy):
     return ["".join(str(v) for v in r) for r in g]
 
 
-# Chomp is drawn as a compact, three-colour 24x24 metasprite.  Dots are
-# transparent, which makes the outline read cleanly against every backdrop.
-# The small variations deliberately use the same NES palette: idle bobs its
-# fin, walk shifts its tail, jump stretches upward, and attack opens a big
-# bite at the nose.
+# Chomp is a hand-pixelled version of the supplied mark.  The heavy navy
+# contour, bright cyan crown, white cheek, and broad dark smile preserve the
+# distinctive mascot silhouette at NES resolution. Dots are transparent.
+# Animation changes the jaw, fins, and body weight instead of redrawing a
+# generic creature, so every frame remains recognisably Chomp.
 def chomp_frame(kind):
     g = canvas(24, 24)
-    lift = 1 if kind == "idle_b" else 0
-    # Rounded blue body, tapering into Chomp's pointed nose on the right.
-    for y in range(3 - lift, 20 - lift):
-        yy = y + lift
-        half = 8 - abs(yy - 11) // 2
-        left = 10 - half
-        right = 15 + (3 if 7 <= yy <= 15 else 0)
-        for x in range(max(0, left), min(23, right) + 1):
-            g[y][x] = 3 if x in (left, right) or y in (3 - lift, 19 - lift) else (2 if x > 9 else 1)
-    # A swept tail and dorsal fin make the logo silhouette recognizable.
-    tail_shift = -1 if kind == "walk_b" else 0
-    for y in range(8 - lift, 17 - lift):
-        x = 4 + (y - (8 - lift)) // 2 + tail_shift
-        if 0 <= x < 24:
-            g[y][x] = 3
-            if x > 0: g[y][x - 1] = 2
-    for y in range(1 - lift, 7 - lift):
-        for x in range(8, 13 - y + lift):
-            if 0 <= y < 24: g[y][x] = 3 if x == 8 or y == 1 - lift else 2
-    # White eye and a dark pupil.
-    g[8 - lift][15] = g[8 - lift][16] = 3
-    g[9 - lift][16] = 1
-    # The mouth is the defining animation: closed at rest, opening while
-    # walking, and a wide, obvious chomp while firing.
-    mouth_y = 14 - lift
-    if kind == "attack":
-        for y in range(11 - lift, 18 - lift):
-            start = 15 + abs(y - (14 - lift)) // 2
-            for x in range(start, 24): g[y][x] = 0
-        for x in range(15, 23):
-            g[10 - lift][x] = 3
-            g[18 - lift][x] = 3
-        g[11 - lift][22] = g[17 - lift][22] = 3
-    else:
-        for x in range(15, 22): g[mouth_y][x] = 1
-        if kind == "walk_b":
-            for x in range(17, 22): g[mouth_y + 1][x] = 0
-    if kind == "jump":
-        # Vertical motion gets a taller dorsal fin and a tucked tail.
+    # The body is built from a controlled silhouette instead of a circle: a
+    # raised crown, swept rear fin, forward crest and soft white lower jaw.
+    outline = (
+        ".........333..........",
+        ".......33333.........3",
+        "......3322233......333",
+        ".....332222233....332.",
+        "....33222222233..332..",
+        "...3322222222233332...",
+        "..3322222222222232....",
+        ".33222222222222223....",
+        "3322222222222222233...",
+        "32222222222222222233..",
+        "322222222222222222233.",
+        "3222222222222222222233",
+        ".322222222222222222223",
+        "..32222222222222222223",
+        "...3222222222222222223",
+        "....322222222222222223",
+        ".....32222222222222223",
+        "......3222222222222223",
+        ".......333333333333333",
+        "........333333333333..",
+        "..........33333333....",
+        "........................",
+        "........................",
+        "........................",
+    )
+    for y, row in enumerate(outline):
+        for x, c in enumerate(row):
+            if c != ".": g[y][x] = int(c)
+    # Blue shading follows the round crown and the nose rather than making a
+    # flat slab of colour.  Palette colour 1 is the dark ink/blue shadow.
+    for y in range(5, 16):
+        for x in range(3, 10):
+            if g[y][x] == 2: g[y][x] = 1
+    for y in range(7, 10):
+        for x in range(11, 16):
+            if g[y][x] == 2: g[y][x] = 3
+    # Big white logo cheek and a crisp navy eye.
+    for y, x0, x1 in ((10, 15, 18), (11, 14, 20), (12, 14, 21), (13, 15, 21)):
+        for x in range(x0, x1 + 1): g[y][x] = 3
+    g[7][15] = g[7][16] = 3
+    g[8][16] = 1
+    # Smile is deliberately broad and curved, with a white lower lip.
+    for y, x0 in ((14, 14), (15, 15), (16, 16)):
+        for x in range(x0, 23): g[y][x] = 1
+    for x in range(17, 22): g[17][x] = 3
+    # A little rear flipper stops the body reading as an oval at a glance.
+    for y, x0 in ((13, 3), (14, 2), (15, 1), (16, 2), (17, 4)):
+        for x in range(x0, x0 + 4): g[y][x] = 2 if x > x0 else 3
+
+    if kind == "idle_b":
+        # Blink and a one-pixel crown bob provide an unobtrusive resting loop.
+        g[7][15] = g[7][16] = 1
+        for x in range(9, 14):
+            if g[1][x]: g[0][x] = g[1][x]
+    elif kind == "walk_b":
+        # Open the smile and kick the rear flipper forward for the stride.
+        for x in range(17, 23): g[15][x] = 0
+        for x in range(18, 22): g[16][x] = 0
+        for y in range(14, 18):
+            g[y][max(0, y - 14)] = 3
+    elif kind == "jump":
+        # Stretch the crown and tuck the flipper during the ascent.
         for y in range(0, 4):
-            for x in range(9, 14 - y): g[y][x] = 3 if x == 9 else 2
-        rect(g, 3, 15, 7, 17, 2)
+            for x in range(10 - y // 2, 14):
+                g[y][x] = 2 if x > 10 - y // 2 else 3
+        for y in range(15, 18):
+            for x in range(1, 6): g[y][x] = 0
+    elif kind == "attack":
+        # The firing pose is the mascot's largest, cleanest chomp.
+        for y in range(13, 19):
+            for x in range(15 + abs(y - 16), 24): g[y][x] = 0
+        for x in range(15, 23):
+            g[12][x] = 3
+            g[19][x] = 3
+        g[13][22] = g[18][22] = 3
     return ["".join(str(v) for v in r) for r in g]
 
 
@@ -184,10 +220,10 @@ ARROW = ["..3.....", "..33....", "..333...", "..3333..", "..333...", "..33....",
          "..3.....", "........"]
 
 # tile numbers (keep in sync with src/main.c)
-T_CHOMP_IDLE_A, T_CHOMP_IDLE_B, T_CHOMP_WALK_A = 0x70, 0x79, 0x82
-T_CHOMP_WALK_B, T_CHOMP_JUMP, T_CHOMP_ATTACK = 0xC0, 0xC9, 0xD2
+T_CHOMP_IDLE_A, T_CHOMP_IDLE_B, T_CHOMP_WALK_A = 0x62, 0x6B, 0x74
+T_CHOMP_WALK_B, T_CHOMP_JUMP, T_CHOMP_ATTACK = 0x7D, 0xC0, 0xC9
 T_BULLET = 11
-T_ENEMY_A, T_ENEMY_B, T_CAPSULE, T_BOSS = 0x85, 0x8E, 0x98, 0xA0
+T_ENEMY_A, T_ENEMY_B, T_CAPSULE, T_BOSS = 0x86, 0x8F, 0x98, 0xA0
 T_BOSS_BULLET, T_EXPLOSION, T_ARROW = 37, 38, 42
 
 blit(CHOMP_IDLE_A, T_CHOMP_IDLE_A, 3)
@@ -253,6 +289,14 @@ for ch, bits in FONT.items():
 
 # ---- background tiles ------------------------------------------------------
 T_GRASS, T_EARTH, T_CLOUD, T_MOUNTAIN, T_PINE, T_LOGO, T_PLATFORM = 0x5B, 0x5C, 0x5D, 0x5E, 0x5F, 0x60, 0x61
+T_SKY, T_MOUNTAIN_PEAK, T_MOUNTAIN_SHADE = 0xD2, 0xD3, 0xD4
+sky = tile(T_SKY)
+for y in range(8):
+    for x in range(8):
+        # A nearly-solid midnight tile with sparse pinprick stars gives the
+        # level a proper deep backdrop rather than an empty black field.
+        sky[y][x] = 1
+        if (x * 5 + y * 3) % 29 == 0: sky[y][x] = 2
 g = tile(T_GRASS)
 for y in range(8):
     for x in range(8):
@@ -268,9 +312,16 @@ for y in range(8):
 mt = tile(T_MOUNTAIN)
 for y in range(8):
     for x in range(8):
-        mt[y][x] = 1 if y >= (7 - x if x < 4 else x - 1) else 0
-        if mt[y][x] and (x + y) % 5 == 0:
-            mt[y][x] = 2
+        mt[y][x] = 1 if y < 2 else 2
+        if y >= 4 and (x + y * 2) % 5 == 0: mt[y][x] = 3
+peak = tile(T_MOUNTAIN_PEAK)
+for y in range(8):
+    for x in range(8):
+        peak[y][x] = 0 if y < 4 - x // 2 else (3 if x < 3 and y < 6 else 2)
+shade = tile(T_MOUNTAIN_SHADE)
+for y in range(8):
+    for x in range(8):
+        shade[y][x] = 1 if (x + y) % 4 else 2
 pn = tile(T_PINE)
 for y in range(8):
     for x in range(8):

@@ -36,15 +36,15 @@
 #define BTN_RIGHT 0x01
 
 /* tile numbers (keep in sync with tools/gen_chr.py) */
-#define T_CHOMP_IDLE_A 0x70
-#define T_CHOMP_IDLE_B 0x79
-#define T_CHOMP_WALK_A 0x82
-#define T_CHOMP_WALK_B 0xC0
-#define T_CHOMP_JUMP 0xC9
-#define T_CHOMP_ATTACK 0xD2
+#define T_CHOMP_IDLE_A 0x62
+#define T_CHOMP_IDLE_B 0x6B
+#define T_CHOMP_WALK_A 0x74
+#define T_CHOMP_WALK_B 0x7D
+#define T_CHOMP_JUMP 0xC0
+#define T_CHOMP_ATTACK 0xC9
 #define T_BULLET 11
-#define T_ENEMY_A 0x85
-#define T_ENEMY_B 0x8E
+#define T_ENEMY_A 0x86
+#define T_ENEMY_B 0x8F
 #define T_CAPSULE 0x98
 #define T_BOSS 0xA0
 #define T_BOSS_BULLET 37
@@ -57,6 +57,9 @@
 #define T_PINE 0x5F
 #define T_LOGO 0x60
 #define T_PLATFORM 0x61
+#define T_SKY 0xD2
+#define T_MOUNTAIN_PEAK 0xD3
+#define T_MOUNTAIN_SHADE 0xD4
 
 #define GROUND 192          /* y of the players' feet */
 #define LEVEL_END 1800      /* camera stops here and the boss arrives */
@@ -106,7 +109,7 @@ static unsigned char pu_state[NUM_PU], pu_y[NUM_PU];
 
 static const unsigned char palette[32] = {
     /* background */
-    0x0F, 0x00, 0x10, 0x30,  0x0F, 0x01, 0x11, 0x28,
+    0x0F, 0x0C, 0x1C, 0x30,  0x0F, 0x01, 0x11, 0x28,
     0x0F, 0x00, 0x11, 0x21,  0x0F, 0x06, 0x16, 0x26,
     /* sprites */
     0x0F, 0x11, 0x27, 0x30,  0x0F, 0x16, 0x27, 0x30,
@@ -429,10 +432,12 @@ static void build_level_bg(void) {
                 else if ((row == 20 && c >= 18 && c <= 25) ||
                          (row == 18 && c >= 38 && c <= 46) ||
                          (row == 21 && c >= 56 && c <= 62)) PPUDATA = T_PLATFORM;
-                else if (row >= top && row < 22) PPUDATA = T_MOUNTAIN;
+                else if (row == top) PPUDATA = T_MOUNTAIN_PEAK;
+                else if (row > top && row < 22)
+                    PPUDATA = ((c + row) % 5 == 0) ? T_MOUNTAIN_SHADE : T_MOUNTAIN;
                 else if (row >= 19 && (c % 7 == 2 || c % 11 == 5)) PPUDATA = T_PINE;
                 else if (row < 11 && ((c * 5 + row * 9) % 31) == 0) PPUDATA = T_CLOUD;
-                else PPUDATA = 0;
+                else PPUDATA = T_SKY;
             }
         }
         /* attributes: sky pal0, mountains pal1, ground pal2 */
