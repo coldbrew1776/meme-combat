@@ -2,7 +2,9 @@
 ROM := build/memeblitz.nes
 RELEASE_ROM := release/memeblitz.nes
 
-all: $(ROM)
+# A normal build leaves a playable ROM in the release location as well as the
+# intermediate build directory, so it is immediately ready for an emulator.
+all: $(RELEASE_ROM)
 
 build/chr.bin: tools/gen_chr.py assets/sprites.png
 	@mkdir -p build
@@ -23,6 +25,6 @@ run: $(ROM)
 	/Applications/Mesen.app/Contents/MacOS/Mesen "$(abspath $(ROM))"
 
 clean:
-	rm -rf build
+	rm -rf build release
 
 .PHONY: all release run clean

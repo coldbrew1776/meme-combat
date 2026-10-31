@@ -11,7 +11,7 @@ title screen, and Start begins, pauses, or resumes a game.
 
 Requires `cc65`, `python3` and Mesen.
 
-    make        # builds build/memeblitz.nes (including sprites from assets/sprites.png)
+    make        # builds release/memeblitz.nes (including sprites from assets/sprites.png)
     make release # creates release/memeblitz.nes locally
     make run    # launches it in Mesen
 
@@ -26,6 +26,7 @@ the boss defeat sequence adds explosions and a victory fanfare.
 `assets/sprites.png` is the editable source for every character, projectile,
 and combat sprite. It is a 128x64 transparent PNG arranged on an 8-pixel grid;
 see `assets/README.md` for its layout and palette. Edit it at its native size
-with nearest-neighbour scaling only, then run `make` to convert it into NES
+with nearest-neighbour scaling only, then run `make release` to convert it into NES
 CHR graphics automatically. The checked-in PNG works in common modern image
-editors and the build uses only Python's standard library.
+editors and the build uses only Python's standard library. The completed ROM is
+written to `release/memeblitz.nes`.
