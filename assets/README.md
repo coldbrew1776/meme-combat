@@ -17,7 +17,8 @@ reads only these regions:
 | 48,24 | 40x40 | boss |
 
 Use transparent pixels for colour 0, and exactly these opaque colours for the
-three NES palette values: `#111111`, `#777777`, and `#FFFFFF`. Preserve native
-pixel dimensions and use nearest-neighbour scaling. `make` converts the PNG
-to the CHR bank used by the NES program; no image-library installation is
-needed.
+three NES palette values: dark blue `#182659`, blue `#2A7AC9`, and gold
+`#FFD35E`. The image is colourful for easier editing; the converter maps them
+to the three NES colour slots selected by each character. Preserve native pixel
+dimensions and use nearest-neighbour scaling. `make` converts the PNG to the
+CHR bank used by the NES program; no image-library installation is needed.

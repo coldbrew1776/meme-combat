@@ -174,11 +174,13 @@ blit(boss_art(), T_BOSS, 5)
 # ---- editable sprite source ------------------------------------------------
 # Sprites live in a single transparent true-colour PNG so they can be adjusted
 # in ordinary image editors.  The converter accepts RGB or RGBA PNGs; use the
-# four colours documented in assets/README.md.  A one-pixel change maps
+# four colours documented in assets/README.md.  These are deliberately vivid
+# editor colours; each still maps to one of the NES palette indices.  A
+# one-pixel change maps
 # directly to one NES pixel, so no resampling is involved.
 SPRITE_SHEET = os.path.join(os.path.dirname(__file__), "..", "assets", "sprites.png")
-COLOURS = {0: (0, 0, 0, 0), 1: (17, 17, 17, 255),
-           2: (119, 119, 119, 255), 3: (255, 255, 255, 255)}
+COLOURS = {0: (0, 0, 0, 0), 1: (24, 38, 89, 255),
+           2: (42, 122, 201, 255), 3: (255, 211, 94, 255)}
 COLOUR_VALUES = {rgb[:3]: value for value, rgb in COLOURS.items() if value}
 
 
