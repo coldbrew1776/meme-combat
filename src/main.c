@@ -57,6 +57,10 @@
 #define T_SKY 0xD2
 #define T_MOUNTAIN_PEAK 0xD3
 #define T_MOUNTAIN_SHADE 0xD4
+#define T_MOON_A 0xD5
+#define T_MOON_B 0xD6
+#define T_MOON_C 0xD7
+#define T_MOON_D 0xD8
 
 #define GROUND 192          /* y of the players' feet */
 #define LEVEL_END 1800      /* camera stops here and the boss arrives */
@@ -429,11 +433,16 @@ static void build_level_bg(void) {
                 else if ((row == 20 && c >= 18 && c <= 25) ||
                          (row == 18 && c >= 38 && c <= 46) ||
                          (row == 21 && c >= 56 && c <= 62)) PPUDATA = T_PLATFORM;
+                /* A distant, cratered moon replaces the former clouds. */
+                else if (c >= 10 && c <= 11 && row >= 3 && row <= 4)
+                    PPUDATA = (row == 3) ? (c == 10 ? T_MOON_A : T_MOON_B) : (c == 10 ? T_MOON_C : T_MOON_D);
+                else if (c >= 45 && c <= 46 && row >= 5 && row <= 6)
+                    PPUDATA = (row == 5) ? (c == 45 ? T_MOON_A : T_MOON_B) : (c == 45 ? T_MOON_C : T_MOON_D);
+                /* Jagged slate ridges make the horizon read as lunar terrain. */
                 else if (row == top) PPUDATA = T_MOUNTAIN_PEAK;
                 else if (row > top && row < 22)
                     PPUDATA = ((c + row) % 5 == 0) ? T_MOUNTAIN_SHADE : T_MOUNTAIN;
-                else if (row >= 19 && (c % 7 == 2 || c % 11 == 5)) PPUDATA = T_PINE;
-                else if (row < 11 && ((c * 5 + row * 9) % 31) == 0) PPUDATA = T_CLOUD;
+                else if (row >= 19 && (c % 7 == 2 || c % 11 == 5)) PPUDATA = T_MOUNTAIN_SHADE;
                 else PPUDATA = T_SKY;
             }
         }
