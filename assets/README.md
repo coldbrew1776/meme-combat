@@ -22,3 +22,18 @@ three NES palette values: dark blue `#182659`, blue `#2A7AC9`, and gold
 to the three NES colour slots selected by each character. Preserve native pixel
 dimensions and use nearest-neighbour scaling. `make` converts the PNG to the
 CHR bank used by the NES program; no image-library installation is needed.
+
+## Level 2 artwork
+
+`lunar.png` is the independent 128x64 transparent source for the Lunar Outpost.
+Use the same three opaque colours and grid as `sprites.png`:
+
+| Position | Size | Sprite |
+| --- | --- | --- |
+| 72,0 / 96,0 | 24x24 each | alien standing / running |
+| 48,24 | 40x40 | Moon Warden saucer boss |
+
+Other areas of this sheet are unused. The build imports these regions into
+separate tiles, preserving Level 1 artwork. The lunar terrain remains generated
+in `tools/gen_chr.py`. The developer option `--export-lunar OUTPUT.png` recreates
+the default lunar sheet; use it only when intentionally replacing hand edits.
