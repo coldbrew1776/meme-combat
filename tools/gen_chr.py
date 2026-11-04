@@ -185,6 +185,54 @@ def boss_art():
 
 blit(boss_art(), T_BOSS, 5)
 
+# Level 2 uses separate tiles and an independently editable sprite sheet.
+T_LUNAR_BOSS, T_ALIEN_A, T_ALIEN_B = 0xB9, 0xD9, 0xE2
+
+
+def alien_art(run):
+    g = canvas(24, 24)
+    rect(g, 6, 1, 16, 8, 2)
+    rect(g, 8, 0, 14, 1, 3)
+    rect(g, 5, 3, 7, 6, 1)
+    rect(g, 15, 3, 17, 6, 1)
+    rect(g, 9, 8, 13, 10, 3)
+    rect(g, 6, 11, 16, 17, 1)
+    rect(g, 8, 11, 14, 15, 2)
+    rect(g, 10, 12, 12, 14, 3)
+    rect(g, 3, 12, 5, 18, 2)
+    rect(g, 17, 12, 19, 18, 2)
+    for x, shift in ((7, -2 if run else 0), (14, 2 if run else 0)):
+        rect(g, x, 18, x + 2, 20, 2)
+        rect(g, x + shift, 21, x + shift + 3, 23, 3)
+    return ["".join(str(v) for v in row) for row in g]
+
+
+def warden_art():
+    """Moon Warden: a flying saucer with a glass dome and landing claws."""
+    g = canvas(40, 40)
+    for y in range(3, 29):
+        for x in range(2, 38):
+            if (x - 20) ** 2 + (y - 17) ** 2 < 180 and y < 19:
+                g[y][x] = 2 if x > 16 else 3
+            if 18 <= y <= 27 and abs(x - 20) < 19 - abs(y - 22):
+                g[y][x] = 1 if y in (18, 26, 27) else 2
+    rect(g, 15, 10, 24, 16, 1)
+    rect(g, 17, 12, 18, 14, 3)
+    rect(g, 21, 12, 22, 14, 3)
+    for x in (7, 15, 23, 31):
+        rect(g, x, 21, x + 1, 23, 3)
+    for x in (8, 28):
+        rect(g, x, 28, x + 2, 35, 1)
+        rect(g, x - 2, 35, x + 4, 37, 3)
+    rect(g, 18, 28, 22, 32, 2)
+    rect(g, 19, 33, 21, 38, 3)
+    return ["".join(str(v) for v in row) for row in g]
+
+
+blit(alien_art(False), T_ALIEN_A, 3)
+blit(alien_art(True), T_ALIEN_B, 3)
+blit(warden_art(), T_LUNAR_BOSS, 5)
+
 # ---- editable sprite source ------------------------------------------------
 # Sprites live in a single transparent true-colour PNG so they can be adjusted
 # in ordinary image editors.  The converter accepts RGB or RGBA PNGs; use the
@@ -252,7 +300,7 @@ def sprite_value(row, x, bpp):
         raise ValueError("sprites.png has a pixel outside the documented four-colour palette")
 
 
-def import_sprite_sheet(path):
+def import_sprite_sheet(path, lunar=False):
     width, height, bpp, rows = png_rows(path)
     if (width, height) != (128, 64):
         raise ValueError("sprites.png must be exactly 128x64 pixels")
@@ -262,13 +310,16 @@ def import_sprite_sheet(path):
                (T_BOSS_BULLET, 8, 24, 1, 1), (T_EXPLOSION, 16, 24, 1, 1),
                (T_ARROW, 24, 24, 1, 1), (T_CAPSULE, 32, 24, 2, 2),
                (T_BOSS, 48, 24, 5, 5))
+    if lunar:
+        regions = ((T_ALIEN_A, 72, 0, 3, 3), (T_ALIEN_B, 96, 0, 3, 3),
+                   (T_LUNAR_BOSS, 48, 24, 5, 5))
     for base, left, top, w_tiles, h_tiles in regions:
         for y in range(h_tiles * 8):
             for x in range(w_tiles * 8):
                 tile(base + (y // 8) * w_tiles + x // 8)[y % 8][x % 8] = sprite_value(rows[top + y], left + x, bpp)
 
 
-def write_sprite_sheet(path):
+def write_sprite_sheet(path, lunar=False):
     width, height = 128, 64
     pixels = [[0] * width for _ in range(height)]
     regions = ((T_STAND, 0, 0, 3, 3), (T_RUN, 24, 0, 3, 3),
@@ -277,6 +328,9 @@ def write_sprite_sheet(path):
                (T_BOSS_BULLET, 8, 24, 1, 1), (T_EXPLOSION, 16, 24, 1, 1),
                (T_ARROW, 24, 24, 1, 1), (T_CAPSULE, 32, 24, 2, 2),
                (T_BOSS, 48, 24, 5, 5))
+    if lunar:
+        regions = ((T_ALIEN_A, 72, 0, 3, 3), (T_ALIEN_B, 96, 0, 3, 3),
+                   (T_LUNAR_BOSS, 48, 24, 5, 5))
     for base, left, top, w_tiles, h_tiles in regions:
         for y in range(h_tiles * 8):
             for x in range(w_tiles * 8):
@@ -307,6 +361,8 @@ for ch, bits in FONT.items():
     for i, b in enumerate(bits):
         if b == "1":
             t[2 + i // 3][2 + i % 3] = 3
+
+tile(ord("."))[6][3] = 3
 
 # ---- background tiles ------------------------------------------------------
 T_GRASS, T_EARTH, T_CLOUD, T_MOUNTAIN, T_PINE, T_LOGO, T_PLATFORM = 0x5B, 0x5C, 0x5D, 0x5E, 0x5F, 0x60, 0x61
@@ -382,15 +438,25 @@ def encode(t):
     return p0 + p1
 
 
+# Crater rims and granular regolith occupy unused background slots.
+for y in range(8):
+    for x in range(8):
+        tile(0xEB)[y][x] = 2 if (x * 3 + y * 5) % 11 < 3 else 1
+        tile(0xEC)[y][x] = 3 if y == 0 else (1 if 2 <= x <= 5 and y < 4 else 2)
+
 bank = bytearray(4096)
+if len(sys.argv) == 3 and sys.argv[1] == "--export-lunar":
+    write_sprite_sheet(sys.argv[2], lunar=True)
+    sys.exit(0)
 if len(sys.argv) == 3 and sys.argv[1] == "--export-sprites":
     write_sprite_sheet(sys.argv[2])
     sys.exit(0)
 if len(sys.argv) != 2:
-    raise SystemExit("usage: gen_chr.py OUTPUT.chr | --export-sprites OUTPUT.png")
+    raise SystemExit("usage: gen_chr.py OUTPUT.chr | --export-sprites OUTPUT.png | --export-lunar OUTPUT.png")
 if not os.path.exists(SPRITE_SHEET):
     raise SystemExit("missing editable sprite sheet: " + SPRITE_SHEET)
 import_sprite_sheet(SPRITE_SHEET)
+import_sprite_sheet(os.path.join(os.path.dirname(SPRITE_SHEET), "lunar.png"), lunar=True)
 for i, t in tiles.items():
     bank[i * 16:i * 16 + 16] = encode(t)
 with open(sys.argv[1], "wb") as f:

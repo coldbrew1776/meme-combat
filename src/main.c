@@ -1,4 +1,4 @@
-/* Meme Blitz - a Contra style NES game (cc65). Level 1: Meme Zone. */
+/* Meme Blitz - a Contra style NES game (cc65). Two-stage campaign. */
 #include <string.h>
 #define REG(a) (*(volatile unsigned char *)(a))
 #define PPUCTRL   REG(0x2000)
@@ -62,6 +62,13 @@
 #define T_MOON_C 0xD7
 #define T_MOON_D 0xD8
 
+#define GAME_VERSION "VERSION 1.1.0"
+#define T_LUNAR_BOSS 0xB9
+#define T_ALIEN_A 0xD9
+#define T_ALIEN_B 0xE2
+#define T_REGOLITH 0xEB
+#define T_CRATER 0xEC
+
 #define GROUND 192          /* y of the players' feet */
 #define LEVEL_END 1800      /* camera stops here and the boss arrives */
 #define MAX_PB 12
@@ -123,6 +130,12 @@ static const unsigned int music_arp[4][4] = {
     { 253, 213, 169, 126 }, { 319, 253, 213, 159 },
     { 213, 169, 142, 106 }, { 284, 225, 189, 142 }
 };
+/* Suspended, descending phrases give the lunar stage an eerie space pulse. */
+static const unsigned int lunar_arp[4][4] = {
+    { 253, 179, 134, 95 }, { 284, 201, 150, 106 },
+    { 319, 225, 169, 119 }, { 284, 213, 159, 106 }
+};
+static const unsigned int lunar_bass[4] = { 507, 570, 640, 570 };
 static const unsigned int music_bass[4] = { 507, 640, 427, 570 };
 static const unsigned char arp_order[8] = { 0, 1, 2, 3, 2, 1, 2, 1 };
 static const unsigned char title_blue[8] = { 0x02, 0x12, 0x22, 0x32, 0x22, 0x12, 0x02, 0x01 };
@@ -165,7 +178,17 @@ static void put_text(unsigned char col, unsigned char row, const char *s) {
 static void load_palette(void) {
     unsigned char i;
     ppu_addr(0x3F00);
-    for (i = 0; i < 32; ++i) PPUDATA = palette[i];
+    for (i = 0; i < 32; ++i) {
+        /* Grey regolith, violet ridges, green alien armour. Keep heroes blue. */
+        if (level_number == 2 && i == 1) PPUDATA = 0x0F;
+        else if (level_number == 2 && i == 5) PPUDATA = 0x03;
+        else if (level_number == 2 && i == 6) PPUDATA = 0x13;
+        else if (level_number == 2 && i == 7) PPUDATA = 0x23;
+        else if (level_number == 2 && i == 10) PPUDATA = 0x10;
+        else if (level_number == 2 && i == 11) PPUDATA = 0x30;
+        else if (level_number == 2 && i == 26) PPUDATA = 0x19;
+        else PPUDATA = palette[i];
+    }
 }
 
 static void screen_off(void) { PPUMASK = 0; }
@@ -309,12 +332,12 @@ static void sound_update(void) {
         return;
     }
     if ((frame & 15) == 0) {
-        note = music_arp[chord][arp_order[(frame >> 4) & 7]];
+        note = level_number == 2 ? lunar_arp[chord][arp_order[(frame >> 4) & 7]] : music_arp[chord][arp_order[(frame >> 4) & 7]];
         APU_P1 = 0x43;
         APU_P1LO = note & 0xFF; APU_P1HI = (note >> 8) & 7;
     }
     if ((frame & 127) == 0) {
-        note = music_bass[chord];
+        note = level_number == 2 ? lunar_bass[chord] : music_bass[chord];
         APU_TRILO = note & 0xFF; APU_TRIHI = (note >> 8) & 7;
     }
     if (death_sound) {
@@ -385,6 +408,7 @@ static void title_screen(void) {
         PPUDATA = v;
     }
     title_anim = 1;
+    put_text(9, 17, GAME_VERSION);
     put_text(13, 19, "1 PLAYER");
     put_text(13, 21, "2 PLAYERS");
     put_text(11, 25, "PRESS START");
@@ -425,10 +449,10 @@ static void build_level_bg(void) {
             for (col = 0; col < 32; ++col) {
                 c = nt * 32 + col;
                 /* Cool slate ground with electric-blue seams replaces earth. */
-                h = 4 + ((c * 3 + 5) % 9);
+                h = level_number == 2 ? 2 + ((c * 5 + 3) % 6) : 4 + ((c * 3 + 5) % 9);
                 top = 22 - h;
-                if (row >= 25) PPUDATA = T_EARTH;
-                else if (row == 24) PPUDATA = T_GRASS;
+                if (row >= 25) PPUDATA = level_number == 2 ? T_REGOLITH : T_EARTH;
+                else if (row == 24) PPUDATA = level_number == 2 ? T_CRATER : T_GRASS;
                 /* Solid ledges: three heights provide stepping stones. */
                 else if ((row == 20 && c >= 18 && c <= 25) ||
                          (row == 18 && c >= 38 && c <= 46) ||
@@ -459,20 +483,20 @@ static unsigned char overlap(int ax, int ay, int aw, int ah, int bx, int by, int
     return ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah;
 }
 
-static void new_game(void) {
+static void start_level(void) {
     unsigned char i;
-    cam = 0; frame = anim_timer = 0; spawn_t = 60; score = 0;
-    boss_on = boss_dying = 0; boss_hp = BOSS_HP; boss_flash = 0; boss_shot = 0; boss_y = 136;
+    cam = 0; frame = anim_timer = 0; spawn_t = 60;
+    boss_on = boss_dying = 0; boss_hp = level_number == 2 ? 40 : BOSS_HP; boss_flash = 0; boss_shot = 0; boss_y = 136;
     for (i = 0; i < MAX_PB; ++i) pb_on[i] = 0;
     for (i = 0; i < MAX_BB; ++i) bb_on[i] = 0;
     for (i = 0; i < MAX_EN; ++i) en_on[i] = 0;
     for (i = 0; i < NUM_PU; ++i) { pu_state[i] = 0; pu_y[i] = 132; }
     for (i = 0; i < 2; ++i) {
         pl[i].x = 24 + i * 24; pl[i].y = GROUND; pl[i].vy = 0; pl[i].face = 0;
-        pl[i].lie = 0; pl[i].lives = 3; pl[i].timer = 0; pl[i].inv = 60;
-        pl[i].wpn = 0; pl[i].cool = 0; pl[i].step = 0; pl[i].moving = pl[i].attack = 0;
+        pl[i].lie = 0; if (level_number == 1) pl[i].lives = 3; pl[i].timer = 0; pl[i].inv = 60;
+        if (level_number == 1) pl[i].wpn = 0; pl[i].cool = 0; pl[i].step = 0; pl[i].moving = pl[i].attack = 0;
         pl[i].jump_buffer = pl[i].coyote = 0;
-        pl[i].state = (i < nplayers) ? 1 : 0;
+        pl[i].state = (i < nplayers && pl[i].lives) ? 1 : 0;
     }
 }
 
@@ -643,18 +667,18 @@ static void update_boss(void) {
     if (boss_x > target) boss_x -= 2;
     else if (boss_x < target) boss_x += 1;
     boss_y = 132 + (((frame & 64) ? (frame & 63) : (63 - (frame & 63))) >> 3);
-    if (boss_x < cam + 250 && ++boss_shot >= 45) {
+    if (boss_x < cam + 250 && ++boss_shot >= (level_number == 2 ? 30 : 45)) {
         boss_shot = 0;
         for (i = 0; i < MAX_BB; ++i) {
             if (bb_on[i]) continue;
             bb_on[i] = 1; bb_x[i] = boss_x - 6;
-            bb_y[i] = boss_y + 22;                  /* red alien blast */
+            bb_y[i] = boss_y + (level_number == 2 && (frame & 32) ? 38 : 22);                  /* red alien blast */
             break;
         }
     }
     for (i = 0; i < MAX_BB; ++i) {
         if (!bb_on[i]) continue;
-        bb_x[i] -= 4;
+        bb_x[i] -= level_number == 2 ? 5 : 4;
         if (bb_x[i] < cam - 8) bb_on[i] = 0;
     }
 }
@@ -665,8 +689,7 @@ static void check_damage(void) {
     for (i = 0; i < 2; ++i) {
         Player *p = &pl[i];
         if (p->state != 1 || p->inv) continue;
-        /* Chomp is rounder than the former soldier: keep collisions inside
-           its visible blue body instead of its transparent tail and bite. */
+        /* Keep collisions inside the soldier silhouette. */
         px = p->x + 4;
         ph = p->lie ? 18 : 21;
         py = p->y - ph;
@@ -720,7 +743,7 @@ static void draw_all(void) {
         if (!en_on[i]) continue;
         sx = en_x[i] - cam;
         if (en_on[i] == 1)
-            add_spr24(sx, GROUND - 24, ((en_x[i] >> 3) & 1) ? T_ENEMY_A : T_ENEMY_B, 2, 1);
+            add_spr24(sx, GROUND - 24, ((en_x[i] >> 3) & 1) ? (level_number == 2 ? T_ALIEN_A : T_ENEMY_A) : (level_number == 2 ? T_ALIEN_B : T_ENEMY_B), 2, 1);
         else
             add_spr(sx + 8, GROUND - 16, T_EXPLOSION, 2);
     }
@@ -743,7 +766,7 @@ static void draw_all(void) {
                 add_spr(sx + (rnd() % 40), boss_y + (rnd() % 40), T_EXPLOSION, 3);
             }
         } else if (!(boss_flash & 2)) {
-            add_spr40(sx, boss_y, T_BOSS, 2);
+            add_spr40(sx, boss_y, level_number == 2 ? T_LUNAR_BOSS : T_BOSS, 2);
         }
     }
     /* HUD: lives, boss health bar */
@@ -757,7 +780,7 @@ static void draw_all(void) {
     add_score(score);
     if (boss_on) {
         add_text(8, 24, "BOSS");
-        for (i = 0; i < (boss_hp + 1) / 2; ++i) add_spr(48 + i * 8, 24, T_BOSS_BULLET, 3);
+        for (i = 0; i < (boss_hp + 3) / 4; ++i) add_spr(48 + i * 8, 24, T_BOSS_BULLET, 3);
     }
 }
 
@@ -783,9 +806,10 @@ static void pause_game(void) {
 /* returns 1 if the level was cleared, 0 on game over */
 static unsigned char play_level(void) {
     unsigned char i;
-    message_screen("LEVEL 1", "MEME ZONE", 90);
+    message_screen(level_number == 2 ? "LEVEL 2" : "LEVEL 1",
+                   level_number == 2 ? "LUNAR OUTPOST" : "MEME ZONE", 90);
     build_level_bg();
-    new_game();
+    start_level();
     sound_start();
     screen_on();
     for (;;) {
@@ -816,8 +840,16 @@ void main(void) {
     wait_vblank(); wait_vblank();
     oam_n = 0;
     for (;;) {
+        level_number = 1;
         title_screen();
-        if (play_level()) message_screen("STAGE CLEAR", "MEME ZONE DEFEATED", 180);
+        score = 0;
+        if (!play_level()) {
+            message_screen("GAME OVER", "TRY AGAIN", 150);
+            continue;
+        }
+        message_screen("STAGE CLEAR", "NEXT LUNAR OUTPOST", 180);
+        level_number = 2;
+        if (play_level()) message_screen("MISSION COMPLETE", "MOON WARDEN DEFEATED", 180);
         else message_screen("GAME OVER", "TRY AGAIN", 150);
     }
 }

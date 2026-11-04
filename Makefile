@@ -6,7 +6,7 @@ RELEASE_ROM := release/memeblitz.nes
 # intermediate build directory, so it is immediately ready for an emulator.
 all: $(RELEASE_ROM)
 
-build/chr.bin: tools/gen_chr.py assets/sprites.png
+build/chr.bin: tools/gen_chr.py assets/sprites.png assets/lunar.png
 	@mkdir -p build
 	python3 tools/gen_chr.py $@
 
