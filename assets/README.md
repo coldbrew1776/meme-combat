@@ -13,6 +13,7 @@ reads only these regions:
 | 72,0 / 96,0 | 24x24 each | enemy soldier standing / running |
 | 0,24 through 40,40 | 8x8 / 16x16 | projectiles, effects, arrow, package |
 | 48,24 | 40x40 | boss |
+| 0,40 | 24x24 | floating supply target |
 
 Use transparent pixels for colour 0, and exactly these opaque colours for the
 three NES palette values: dark blue `#182659`, blue `#2A7AC9`, and gold
@@ -36,10 +37,15 @@ separate tiles, preserving Level 1 artwork. The lunar terrain remains generated
 in `tools/gen_chr.py`. The developer option `--export-lunar OUTPUT.png` recreates
 the default lunar sheet; use it only when intentionally replacing hand edits.
 
-The floating 24x24 supply target is generated from the default package design
-in `tools/gen_chr.py`; the editable 16x16 package is used after it is shot.
+The floating 24x24 supply target is read from `sprites.png` at 0,40;
+the independent editable 16x16 package is used after it is shot.
 Enemy palette slots render as green uniform shadows, skin tone, and light
-highlights. Player shots use a compact 4x4 silhouette within their 8x8 tile.
+highlights. Player shots use a compact round 4x4 silhouette within their 8x8 tile;
+enemy and boss shots use a round 6x6 silhouette. Edit these at 0,24 and 8,24.
+All character and combat sprites now come from PNG files; ordinary builds
+read these files without overwriting them. Save edits, then run `make` to
+convert them into NES tiles and rebuild the playable ROM. Keep transparency
+and disable antialiasing so each pixel remains one of the documented colours.
 
 ## Soldier player
 
