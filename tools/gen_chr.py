@@ -117,22 +117,54 @@ blit(boss_art(), T_BOSS, 5)
 T_LUNAR_BOSS, T_ALIEN_A, T_ALIEN_B = 0xB9, 0xD9, 0xE2
 
 
-def alien_art(run):
+def soldier(run, enemy):
+    """A shaded 24x24 commando; the original human combatants, redrawn."""
     g = canvas(24, 24)
-    rect(g, 6, 1, 16, 8, 2)
-    rect(g, 8, 0, 14, 1, 3)
-    rect(g, 5, 3, 7, 6, 1)
-    rect(g, 15, 3, 17, 6, 1)
-    rect(g, 9, 8, 13, 10, 3)
-    rect(g, 6, 11, 16, 17, 1)
-    rect(g, 8, 11, 14, 15, 2)
-    rect(g, 10, 12, 12, 14, 3)
-    rect(g, 3, 12, 5, 18, 2)
-    rect(g, 17, 12, 19, 18, 2)
-    for x, shift in ((7, -2 if run else 0), (14, 2 if run else 0)):
-        rect(g, x, 18, x + 2, 20, 2)
-        rect(g, x + shift, 21, x + shift + 3, 23, 3)
-    return ["".join(str(v) for v in row) for row in g]
+    # Helmet, brim, face, eye, and chin create a readable human profile.
+    rect(g, 7, 1, 13, 1, 1)
+    rect(g, 5, 2, 15, 3, 1)
+    rect(g, 4, 4, 16, 4, 3)              # helmet rim / enemy beret band
+    rect(g, 6, 5, 14, 8, 2)
+    rect(g, 7, 8, 13, 9, 2)
+    g[6][13] = g[6][14] = 1              # brow and eye
+    g[8][14] = 1                         # nose
+    g[9][11] = g[9][12] = 1              # jaw shadow
+    # The opposing soldier has a cap badge and a darker collar; silhouette
+    # remains deliberately human rather than the recent alien replacement.
+    if enemy:
+        g[3][9] = g[3][10] = 3
+        rect(g, 7, 10, 14, 11, 1)
+    else:
+        rect(g, 4, 3, 6, 3, 3)           # hero's bandana tail
+        g[2][14] = 3
+        rect(g, 7, 10, 14, 11, 3)
+    # Layered vest, belt, hands, rifle stock, receiver, and barrel.
+    rect(g, 6, 11, 15, 16, 1)
+    rect(g, 7, 12, 14, 15, 3)
+    rect(g, 8, 12, 10, 14, 2)            # chest highlight
+    rect(g, 6, 16, 15, 17, 1)
+    rect(g, 2, 12, 5, 15, 1)
+    rect(g, 3, 14, 6, 16, 2)
+    rect(g, 15, 11, 18, 14, 2)
+    rect(g, 17, 11, 22, 12, 1)
+    rect(g, 16, 13, 20, 15, 1)
+    rect(g, 18, 13, 20, 13, 3)
+    g[11][22] = 3
+    # Distinct leg poses give the restored protagonist and enemies real
+    # running weight rather than the former flat, symmetric blocks.
+    if run:
+        rect(g, 7, 18, 10, 19, 1)
+        rect(g, 5, 20, 8, 21, 1)
+        rect(g, 3, 22, 7, 23, 3)
+        rect(g, 12, 18, 15, 19, 1)
+        rect(g, 14, 20, 17, 21, 1)
+        rect(g, 16, 22, 21, 23, 3)
+    else:
+        rect(g, 7, 18, 10, 22, 1)
+        rect(g, 12, 18, 15, 22, 1)
+        rect(g, 5, 23, 10, 23, 3)
+        rect(g, 11, 23, 16, 23, 3)
+    return ["".join(str(v) for v in r) for r in g]
 
 
 def warden_art():
@@ -157,14 +189,14 @@ def warden_art():
     return ["".join(str(v) for v in row) for row in g]
 
 
-# Both stages use oversized alien heads and dark eye sockets.
-blit(alien_art(False), T_ENEMY_A, 3)
-blit(alien_art(True), T_ENEMY_B, 3)
+# Both stages restore the shaded human enemy commandos.
+blit(soldier(False, True), T_ENEMY_A, 3)
+blit(soldier(True, True), T_ENEMY_B, 3)
 # The floating target has a 24x24 silhouette; the released crate stays 16x16.
 blit(["".join(PACKAGE[y * 16 // 24][x * 16 // 24] for x in range(24))
       for y in range(24)], 0x8F, 3)
-blit(alien_art(False), T_ALIEN_A, 3)
-blit(alien_art(True), T_ALIEN_B, 3)
+blit(soldier(False, True), T_ALIEN_A, 3)
+blit(soldier(True, True), T_ALIEN_B, 3)
 blit(warden_art(), T_LUNAR_BOSS, 5)
 
 # ---- editable sprite source ------------------------------------------------
@@ -252,14 +284,14 @@ def import_sprite_sheet(path, lunar=False):
                 tile(base + (y // 8) * w_tiles + x // 8)[y % 8][x % 8] = sprite_value(rows[top + y], left + x, bpp)
 
 
-def import_chomp():
+def import_player():
     """Import the independent, transparent three-colour player poses."""
     folder = os.path.join(os.path.dirname(SPRITE_SHEET), "sprites")
-    with open(os.path.join(folder, "player_chomp.json")) as source:
+    with open(os.path.join(folder, "player_soldier.json")) as source:
         meta = json.load(source)
-    width, height, bpp, rows = png_rows(os.path.join(folder, "player_chomp.png"))
+    width, height, bpp, rows = png_rows(os.path.join(folder, "player_soldier.png"))
     if [width, height] != meta["size"] or bpp != 4:
-        raise ValueError("Chomp sheet must have its documented dimensions and alpha")
+        raise ValueError("Soldier sheet must have its documented dimensions and alpha")
     colours = {tuple(c): i + 1 for i, c in enumerate(meta["palette"])}
     for frame in meta["frames"].values():
         for y in range(24):
@@ -407,7 +439,7 @@ if not os.path.exists(SPRITE_SHEET):
     raise SystemExit("missing editable sprite sheet: " + SPRITE_SHEET)
 import_sprite_sheet(SPRITE_SHEET)
 import_sprite_sheet(os.path.join(os.path.dirname(SPRITE_SHEET), "lunar.png"), lunar=True)
-import_chomp()
+import_player()
 for i, t in tiles.items():
     bank[i * 16:i * 16 + 16] = encode(t)
 with open(sys.argv[1], "wb") as f:

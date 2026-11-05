@@ -126,8 +126,8 @@ static const unsigned char palette[32] = {
     0x0F, 0x0C, 0x1C, 0x30,  0x0F, 0x01, 0x11, 0x28,
     0x0F, 0x2D, 0x11, 0x21,  0x0F, 0x06, 0x16, 0x26,
     /* sprites */
-    0x0F, 0x0F, 0x2C, 0x30,  0x0F, 0x0F, 0x21, 0x30,
-    0x0F, 0x0F, 0x10, 0x30,  0x0F, 0x06, 0x16, 0x26
+    0x0F, 0x11, 0x27, 0x30,  0x0F, 0x16, 0x27, 0x30,
+    0x0F, 0x0B, 0x27, 0x30,  0x0F, 0x06, 0x16, 0x26
 };
 
 /* Relaxed Am - F - C - G loop: plucked pulse arpeggio over a triangle bass.
@@ -706,9 +706,9 @@ static void check_damage(void) {
     for (i = 0; i < 2; ++i) {
         Player *p = &pl[i];
         if (p->state != 1 || p->inv) continue;
-        /* Exclude Chomp's splash tips; crouching compresses the body. */
+        /* Keep damage bounds within the soldier's torso and prone pose. */
         px = p->x + 4;
-        ph = p->lie ? 12 : 18;
+        ph = p->lie ? 8 : 21;
         py = p->y - ph;
         for (j = 0; j < MAX_EN; ++j)
             if (en_on[j] == 1 && overlap(px, py, 16, ph, en_x[j] + 7, GROUND - 24, 10, 24)) kill_player(p);
