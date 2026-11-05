@@ -189,14 +189,45 @@ def warden_art():
     return ["".join(str(v) for v in row) for row in g]
 
 
-# Both stages restore the shaded human enemy commandos.
+def alien_art(run):
+    """Lunar invader with a tall skull, black eyes, and jointed silver limbs."""
+    g = canvas(24, 24)
+    rect(g, 8, 0, 13, 1, 3)
+    rect(g, 5, 2, 16, 7, 3)
+    rect(g, 6, 8, 15, 9, 2)
+    rect(g, 8, 10, 13, 10, 3)
+    # Wide dark sockets distinguish the alien from the soldiers' helmets.
+    rect(g, 6, 4, 9, 6, 1)
+    rect(g, 12, 4, 15, 6, 1)
+    rect(g, 10, 9, 11, 9, 1)
+    rect(g, 9, 11, 12, 16, 2)
+    rect(g, 7, 12, 14, 13, 3)
+    rect(g, 4, 12, 6, 16, 3)
+    rect(g, 14, 14, 17, 16, 3)
+    rect(g, 16, 12, 22, 13, 1)
+    g[12][22] = 3
+    if run:
+        rect(g, 7, 17, 9, 19, 2)
+        rect(g, 4, 20, 7, 22, 3)
+        rect(g, 3, 23, 7, 23, 1)
+        rect(g, 12, 17, 14, 19, 2)
+        rect(g, 15, 20, 17, 22, 3)
+        rect(g, 15, 23, 19, 23, 1)
+    else:
+        for x in (7, 13):
+            rect(g, x, 17, x + 1, 21, 2)
+            rect(g, x - 1, 22, x + 3, 23, 3)
+    return ["".join(str(v) for v in row) for row in g]
+
+
+# Earth soldiers and lunar invaders have independent editable artwork.
 blit(soldier(False, True), T_ENEMY_A, 3)
 blit(soldier(True, True), T_ENEMY_B, 3)
 # The floating target has a 24x24 silhouette; the released crate stays 16x16.
 blit(["".join(PACKAGE[y * 16 // 24][x * 16 // 24] for x in range(24))
       for y in range(24)], 0x8F, 3)
-blit(soldier(False, True), T_ALIEN_A, 3)
-blit(soldier(True, True), T_ALIEN_B, 3)
+blit(alien_art(False), T_ALIEN_A, 3)
+blit(alien_art(True), T_ALIEN_B, 3)
 blit(warden_art(), T_LUNAR_BOSS, 5)
 
 # ---- editable sprite source ------------------------------------------------
