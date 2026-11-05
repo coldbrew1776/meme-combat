@@ -7,7 +7,7 @@ FCEUX ?= fceux
 # intermediate build directory, so it is immediately ready for an emulator.
 all: $(RELEASE_ROM)
 
-build/chr.bin: tools/gen_chr.py assets/sprites.png assets/lunar.png
+build/chr.bin: tools/gen_chr.py assets/sprites.png assets/lunar.png assets/sprites/player_chomp.png assets/sprites/player_chomp.json
 	@mkdir -p build
 	python3 tools/gen_chr.py $@
 

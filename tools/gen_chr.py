@@ -5,6 +5,7 @@ Usage: gen_chr.py OUTPUT.chr
 The same 4K tile set is written to both pattern tables (sprites and
 background), so tile numbers mean the same thing everywhere.
 """
+import json
 import os
 import struct
 import sys
@@ -41,74 +42,6 @@ def rect(g, x0, y0, x1, y1, c):
             g[y][x] = c
 
 
-def soldier(run, enemy):
-    """A shaded 24x24 commando; the original human combatants, redrawn."""
-    g = canvas(24, 24)
-    # Helmet, brim, face, eye, and chin create a readable human profile.
-    rect(g, 7, 1, 13, 1, 1)
-    rect(g, 5, 2, 15, 3, 1)
-    rect(g, 4, 4, 16, 4, 3)              # helmet rim / enemy beret band
-    rect(g, 6, 5, 14, 8, 2)
-    rect(g, 7, 8, 13, 9, 2)
-    g[6][13] = g[6][14] = 1              # brow and eye
-    g[8][14] = 1                         # nose
-    g[9][11] = g[9][12] = 1              # jaw shadow
-    # The opposing soldier has a cap badge and a darker collar; silhouette
-    # remains deliberately human rather than the recent alien replacement.
-    if enemy:
-        g[3][9] = g[3][10] = 3
-        rect(g, 7, 10, 14, 11, 1)
-    else:
-        rect(g, 4, 3, 6, 3, 3)           # hero's bandana tail
-        g[2][14] = 3
-        rect(g, 7, 10, 14, 11, 3)
-    # Layered vest, belt, hands, rifle stock, receiver, and barrel.
-    rect(g, 6, 11, 15, 16, 1)
-    rect(g, 7, 12, 14, 15, 3)
-    rect(g, 8, 12, 10, 14, 2)            # chest highlight
-    rect(g, 6, 16, 15, 17, 1)
-    rect(g, 2, 12, 5, 15, 1)
-    rect(g, 3, 14, 6, 16, 2)
-    rect(g, 15, 11, 18, 14, 2)
-    rect(g, 17, 11, 22, 12, 1)
-    rect(g, 16, 13, 20, 15, 1)
-    rect(g, 18, 13, 20, 13, 3)
-    g[11][22] = 3
-    # Distinct leg poses give the restored protagonist and enemies real
-    # running weight rather than the former flat, symmetric blocks.
-    if run:
-        rect(g, 7, 18, 10, 19, 1)
-        rect(g, 5, 20, 8, 21, 1)
-        rect(g, 3, 22, 7, 23, 3)
-        rect(g, 12, 18, 15, 19, 1)
-        rect(g, 14, 20, 17, 21, 1)
-        rect(g, 16, 22, 21, 23, 3)
-    else:
-        rect(g, 7, 18, 10, 22, 1)
-        rect(g, 12, 18, 15, 22, 1)
-        rect(g, 5, 23, 10, 23, 3)
-        rect(g, 11, 23, 16, 23, 3)
-    return ["".join(str(v) for v in r) for r in g]
-
-
-def lying(enemy):
-    g = canvas(24, 8)
-    rect(g, 0, 4, 5, 6, 1)              # legs
-    rect(g, 6, 3, 15, 6, 3)             # torso
-    rect(g, 6, 5, 15, 5, 1)
-    rect(g, 16, 2, 20, 6, 2)            # head
-    rect(g, 16, 1, 20, 2, 1)
-    g[4][19] = 3 if enemy else 1
-    rect(g, 14, 4, 18, 5, 2)            # arm
-    rect(g, 17, 5, 23, 6, 1)            # rifle
-    return ["".join(str(v) for v in r) for r in g]
-
-
-STAND = soldier(False, False)
-RUN = soldier(True, False)
-LIE = lying(False)
-ENEMY_A = soldier(False, True)
-ENEMY_B = soldier(True, True)
 # A 16x16 supply crate is deliberately a generous target and remains a
 # recognizable package as it drops after being shot.
 PACKAGE = [
@@ -134,12 +67,7 @@ T_BULLET = 11
 T_ENEMY_A, T_ENEMY_B, T_CAPSULE, T_BOSS = 0x7D, 0x86, 0x98, 0xA0
 T_BOSS_BULLET, T_EXPLOSION, T_ARROW = 37, 38, 42
 
-blit(STAND, T_STAND, 3)
-blit(RUN, T_RUN, 3)
-blit(LIE, T_LIE, 3)
 blit(BULLET, T_BULLET, 1)
-blit(ENEMY_A, T_ENEMY_A, 3)
-blit(ENEMY_B, T_ENEMY_B, 3)
 blit(PACKAGE, T_CAPSULE, 2)
 blit(BOSS_BULLET, T_BOSS_BULLET, 1)
 blit(EXPLOSION, T_EXPLOSION, 1)
@@ -310,8 +238,7 @@ def import_sprite_sheet(path, lunar=False):
     width, height, bpp, rows = png_rows(path)
     if (width, height) != (128, 64):
         raise ValueError("sprites.png must be exactly 128x64 pixels")
-    regions = ((T_STAND, 0, 0, 3, 3), (T_RUN, 24, 0, 3, 3),
-               (T_LIE, 48, 0, 3, 1), (T_ENEMY_A, 72, 0, 3, 3),
+    regions = ((T_ENEMY_A, 72, 0, 3, 3),
                (T_ENEMY_B, 96, 0, 3, 3), (T_BULLET, 0, 24, 1, 1),
                (T_BOSS_BULLET, 8, 24, 1, 1), (T_EXPLOSION, 16, 24, 1, 1),
                (T_ARROW, 24, 24, 1, 1), (T_CAPSULE, 32, 24, 2, 2),
@@ -325,11 +252,28 @@ def import_sprite_sheet(path, lunar=False):
                 tile(base + (y // 8) * w_tiles + x // 8)[y % 8][x % 8] = sprite_value(rows[top + y], left + x, bpp)
 
 
+def import_chomp():
+    """Import the independent, transparent three-colour player poses."""
+    folder = os.path.join(os.path.dirname(SPRITE_SHEET), "sprites")
+    with open(os.path.join(folder, "player_chomp.json")) as source:
+        meta = json.load(source)
+    width, height, bpp, rows = png_rows(os.path.join(folder, "player_chomp.png"))
+    if [width, height] != meta["size"] or bpp != 4:
+        raise ValueError("Chomp sheet must have its documented dimensions and alpha")
+    colours = {tuple(c): i + 1 for i, c in enumerate(meta["palette"])}
+    for frame in meta["frames"].values():
+        for y in range(24):
+            for x in range(24):
+                offset = (frame["x"] + x) * bpp
+                pixel = tuple(rows[frame["y"] + y][offset:offset + bpp])
+                value = 0 if pixel[3] == 0 else colours[pixel]
+                tile(frame["tile"] + y // 8 * 3 + x // 8)[y % 8][x % 8] = value
+
+
 def write_sprite_sheet(path, lunar=False):
     width, height = 128, 64
     pixels = [[0] * width for _ in range(height)]
-    regions = ((T_STAND, 0, 0, 3, 3), (T_RUN, 24, 0, 3, 3),
-               (T_LIE, 48, 0, 3, 1), (T_ENEMY_A, 72, 0, 3, 3),
+    regions = ((T_ENEMY_A, 72, 0, 3, 3),
                (T_ENEMY_B, 96, 0, 3, 3), (T_BULLET, 0, 24, 1, 1),
                (T_BOSS_BULLET, 8, 24, 1, 1), (T_EXPLOSION, 16, 24, 1, 1),
                (T_ARROW, 24, 24, 1, 1), (T_CAPSULE, 32, 24, 2, 2),
@@ -463,6 +407,7 @@ if not os.path.exists(SPRITE_SHEET):
     raise SystemExit("missing editable sprite sheet: " + SPRITE_SHEET)
 import_sprite_sheet(SPRITE_SHEET)
 import_sprite_sheet(os.path.join(os.path.dirname(SPRITE_SHEET), "lunar.png"), lunar=True)
+import_chomp()
 for i, t in tiles.items():
     bank[i * 16:i * 16 + 16] = encode(t)
 with open(sys.argv[1], "wb") as f:

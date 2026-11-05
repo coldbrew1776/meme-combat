@@ -1,6 +1,6 @@
 # Editable NES sprites
 
-`sprites.png` is the source artwork for all of the game's moving combat
+`sprites.png` is the source artwork for the game's enemy and combat
 graphics. It is deliberately a normal transparent PNG, so it can be edited in
 Preview, Paint, GIMP, Aseprite, Photoshop, or any similar modern editor.
 
@@ -9,9 +9,7 @@ reads only these regions:
 
 | Position | Size | Sprite |
 | --- | --- | --- |
-| 0,0 | 24x24 | player standing |
-| 24,0 | 24x24 | player running |
-| 48,0 | 24x8 | player down |
+| 0,0 through 71,23 | unused | player moved to independent Chomp sheet |
 | 72,0 / 96,0 | 24x24 each | alien standing / running |
 | 0,24 through 40,40 | 8x8 / 16x16 | projectiles, effects, arrow, package |
 | 48,24 | 40x40 | boss |
@@ -42,3 +40,24 @@ The floating 24x24 supply target is generated from the default package design
 in `tools/gen_chr.py`; the editable 16x16 package is used after it is shot.
 Alien palette slots render as black, grey, and white in both stages. Player
 shots use a compact 4x4 silhouette within their 8x8 tile.
+
+## Chomp player
+
+`sprites/player_chomp.png` is a 168x24 RGBA sheet of seven 24x24 poses.
+`sprites/player_chomp.json` records each frame's position, tile base, palette,
+and timing at 60 game updates per second. Its pixels use transparent, dark
+`#081828`, cyan `#00C0D8`, and white `#FFFFFF`; these map to NES transparency,
+black, cyan (blue for player two), and white. The build reads this sheet last
+so neither stage can replace the player artwork.
+
+The supplied issue logo was isolated from its connected pale background,
+resampled with nearest neighbour to 22x22, and reduced to three opaque colours.
+White highlights inside the logo were retained. Poses use nearest-neighbour
+squash/stretch, a one-pixel idle bob, and an enlarged bite. Keep the sheet at
+native resolution with no antialiasing. The crouch frame fills the bottom twelve
+rows; standing damage bounds exclude the splash tips (16x18, or 16x12 crouched).
+Landing reuses the squashed run pose for six updates. Shooting opens the bite
+while preserving existing projectile controls. Damage/death and respawn blink.
+Tile ranges 0C–1D and ED–FE are reserved for the additional Chomp poses; tile 00
+stays blank for title/background fills. The original player regions in
+`sprites.png` are unused and are no longer imported or exported.
