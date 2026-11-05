@@ -42,6 +42,7 @@
 #define T_BULLET 11
 #define T_ENEMY_A 0x7D
 #define T_ENEMY_B 0x86
+#define T_TARGET 0x8F
 #define T_CAPSULE 0x98
 #define T_BOSS 0xA0
 #define T_BOSS_BULLET 37
@@ -118,10 +119,10 @@ static unsigned char pu_state[NUM_PU], pu_y[NUM_PU];
 static const unsigned char palette[32] = {
     /* background */
     0x0F, 0x0C, 0x1C, 0x30,  0x0F, 0x01, 0x11, 0x28,
-    0x0F, 0x00, 0x11, 0x21,  0x0F, 0x06, 0x16, 0x26,
+    0x0F, 0x2D, 0x11, 0x21,  0x0F, 0x06, 0x16, 0x26,
     /* sprites */
     0x0F, 0x11, 0x27, 0x30,  0x0F, 0x16, 0x27, 0x30,
-    0x0F, 0x00, 0x10, 0x30,  0x0F, 0x06, 0x16, 0x26
+    0x0F, 0x0F, 0x10, 0x30,  0x0F, 0x06, 0x16, 0x26
 };
 
 /* Relaxed Am - F - C - G loop: plucked pulse arpeggio over a triangle bass.
@@ -179,14 +180,13 @@ static void load_palette(void) {
     unsigned char i;
     ppu_addr(0x3F00);
     for (i = 0; i < 32; ++i) {
-        /* Grey regolith, violet ridges, green alien armour. Keep heroes blue. */
+        /* Grey regolith and violet ridges. Aliens stay black and white. */
         if (level_number == 2 && i == 1) PPUDATA = 0x0F;
         else if (level_number == 2 && i == 5) PPUDATA = 0x03;
         else if (level_number == 2 && i == 6) PPUDATA = 0x13;
         else if (level_number == 2 && i == 7) PPUDATA = 0x23;
         else if (level_number == 2 && i == 10) PPUDATA = 0x10;
         else if (level_number == 2 && i == 11) PPUDATA = 0x30;
-        else if (level_number == 2 && i == 26) PPUDATA = 0x19;
         else PPUDATA = palette[i];
     }
 }
@@ -310,6 +310,7 @@ static void sound_death(void) {
 static void sound_boss_defeat(void) {
     shot_sound = death_sound = 0;
     victory_sound = 180;
+    APU_P2 = 0x30;
     APU_NOISE = 0x0F;
     APU_NZLO = 0x04;
     APU_NZHI = 0x18;
@@ -320,7 +321,7 @@ static void sound_update(void) {
     unsigned char chord = (frame >> 7) & 3;
     if (victory_sound) {
         unsigned char beat = (180 - victory_sound) >> 3;
-        if ((victory_sound & 7) == 0) {
+        if (victory_sound == 180 || (victory_sound & 7) == 0) {
             note = victory_notes[beat & 7];
             APU_P1 = 0x47; APU_P1LO = note & 0xFF; APU_P1HI = (note >> 8) & 7;
             APU_TRILO = (note << 1) & 0xFF; APU_TRIHI = (note >> 7) & 7;
@@ -432,7 +433,10 @@ static void message_screen(const char *l1, const char *l2, unsigned char frames)
     put_text(16 - (unsigned char)strlen(l1) / 2, 11, l1);
     put_text(16 - (unsigned char)strlen(l2) / 2, 14, l2);
     screen_on();
-    while (frames--) present();
+    while (frames--) {
+        if (victory_sound) sound_update();
+        present();
+    }
 }
 
 /* ---------------------------------------------------------- level BG --- */
@@ -565,7 +569,7 @@ static void update_player(unsigned char i) {
     if (p->attack) --p->attack;
     p->moving = 0;
     floor = platform_floor(p->x + 12);
-    ground = (p->y == floor);
+    ground = (p->vy == 0 && (p->y == GROUND || p->y == floor));
     /* Keep a short input buffer and a few frames of grace after an edge.
        This makes jumping dependable even while running across ledges. */
     if (pressed[i] & BTN_A) p->jump_buffer = 6;
@@ -577,7 +581,7 @@ static void update_player(unsigned char i) {
         if (pd & BTN_LEFT) { p->x -= 3; p->face = 1; ++p->step; p->moving = 1; }
         else if (pd & BTN_RIGHT) { p->x += 3; p->face = 0; ++p->step; p->moving = 1; }
         floor = platform_floor(p->x + 12);
-        ground = (p->y == floor);
+        ground = (p->vy == 0 && (p->y == GROUND || p->y == floor));
         /* A is the only jump input; B is passed exclusively to shooting. */
         if (p->jump_buffer && p->coyote) {
             p->vy = -10; p->jump_buffer = 0; p->coyote = 0;
@@ -591,6 +595,8 @@ static void update_player(unsigned char i) {
         p->y += p->vy;
         if (p->vy < 10) ++p->vy;
         floor = platform_floor(p->x + 12);
+        /* A ledge overhead must not hide the ground beneath it. */
+        if (old_y > floor) floor = GROUND;
         if (p->vy >= 0 && old_y <= floor && p->y >= floor) { p->y = floor; p->vy = 0; }
     }
     player_shoot(p, pressed[i] & BTN_B, pd & BTN_B);
@@ -624,7 +630,7 @@ static void update_bullets(void) {
         }
         if (!pb_on[i]) continue;
         for (j = 0; j < NUM_PU; ++j) {
-            if (pu_state[j] == 0 && overlap(pb_x[i] + 2, pb_y[i] + 2, 4, 4, pu_world_x[j], pu_y[j], 16, 16)) {
+            if (pu_state[j] == 0 && overlap(pb_x[i] + 2, pb_y[i] + 2, 4, 4, pu_world_x[j] - 4, pu_y[j] - 4, 24, 24)) {
                 pu_state[j] = 1; pb_on[i] = 0; break;
             }
         }
@@ -666,7 +672,7 @@ static void update_boss(void) {
     target = cam + 196 + ((frame & 64) ? (frame & 63) : (63 - (frame & 63))) / 3;
     if (boss_x > target) boss_x -= 2;
     else if (boss_x < target) boss_x += 1;
-    boss_y = 132 + (((frame & 64) ? (frame & 63) : (63 - (frame & 63))) >> 3);
+    boss_y = 112 + (((frame & 64) ? (frame & 63) : (63 - (frame & 63))) >> 1);
     if (boss_x < cam + 250 && ++boss_shot >= (level_number == 2 ? 30 : 45)) {
         boss_shot = 0;
         for (i = 0; i < MAX_BB; ++i) {
@@ -754,7 +760,8 @@ static void draw_all(void) {
     for (i = 0; i < NUM_PU; ++i) {
         sx = pu_world_x[i] - cam;
         if (pu_state[i] == 0 || pu_state[i] == 1) {
-            add_spr16(sx, pu_y[i], T_CAPSULE, 0, 0);
+            if (pu_state[i] == 0) add_spr24(sx - 4, pu_y[i] - 4, T_TARGET, 0, 0);
+            else add_spr16(sx, pu_y[i], T_CAPSULE, 0, 0);
             if (pu_state[i] == 1) add_spr(sx + 5, pu_y[i] + 4, i ? 'R' : 'S', 3);
         }
     }
