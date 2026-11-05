@@ -3,7 +3,7 @@
 A Contra-style NES run-and-gun written in C (cc65). The opening screen shows the
 current version, **1.1.0** (maintained in `GAME_VERSION` in `src/main.c`).
 Level 1 is **Meme Zone**: one or two
-meme soldiers run right, shoot enemies, grab power-ups (shoot the floating capsule, then
+Chomp characters run right, shoot enemies, grab power-ups (shoot the floating capsule, then
 touch the dropped supply package: S = spread, R = rapid fire) and beat the boss, which has hit points.
 
 Defeating the first boss unlocks **Level 2: Lunar Outpost**, with cratered grey
@@ -41,8 +41,14 @@ through the stage-clear or mission-complete screen.
 
 ## Editing character sprites
 
-`assets/sprites.png` is the editable source for every character, projectile,
-and combat sprite. It is a 128x64 transparent PNG arranged on an 8-pixel grid;
+`assets/sprites/player_chomp.png` contains the player’s transparent 24x24
+Chomp poses, with frame positions and NES tile numbers in the adjacent JSON.
+Players bob while idle, chomp while running and shooting, stretch during jumps,
+and squash on landing or while ducking. Player two uses a blue accent; player
+one uses cyan. Animation advances on game updates and freezes while paused.
+
+`assets/sprites.png` is the editable source for enemies, projectiles,
+and combat effects. It is a 128x64 transparent PNG arranged on an 8-pixel grid;
 see `assets/README.md` for its layout and palette. Edit it at its native size
 with nearest-neighbour scaling only, then run `make release` to convert it into NES
 CHR graphics automatically. The checked-in PNG works in common modern image

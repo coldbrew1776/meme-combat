@@ -39,6 +39,10 @@
 #define T_STAND 0x62
 #define T_RUN 0x6B
 #define T_LIE 0x74
+#define T_IDLE_BOB 0x0C
+#define T_JUMP 0x15
+#define T_FALL 0xED
+#define T_ATTACK 0xF6
 #define T_BULLET 11
 #define T_ENEMY_A 0x7D
 #define T_ENEMY_B 0x86
@@ -93,6 +97,7 @@ typedef struct {
     unsigned char moving;
     unsigned char attack;
     unsigned char jump_buffer, coyote;
+    unsigned char anim, landing;
 } Player;
 
 static Player pl[2];
@@ -121,7 +126,7 @@ static const unsigned char palette[32] = {
     0x0F, 0x0C, 0x1C, 0x30,  0x0F, 0x01, 0x11, 0x28,
     0x0F, 0x2D, 0x11, 0x21,  0x0F, 0x06, 0x16, 0x26,
     /* sprites */
-    0x0F, 0x11, 0x27, 0x30,  0x0F, 0x16, 0x27, 0x30,
+    0x0F, 0x0F, 0x2C, 0x30,  0x0F, 0x0F, 0x21, 0x30,
     0x0F, 0x0F, 0x10, 0x30,  0x0F, 0x06, 0x16, 0x26
 };
 
@@ -500,6 +505,7 @@ static void start_level(void) {
         pl[i].lie = 0; if (level_number == 1) pl[i].lives = 3; pl[i].timer = 0; pl[i].inv = 60;
         if (level_number == 1) pl[i].wpn = 0; pl[i].cool = 0; pl[i].step = 0; pl[i].moving = pl[i].attack = 0;
         pl[i].jump_buffer = pl[i].coyote = 0;
+        pl[i].anim = pl[i].landing = 0;
         pl[i].state = (i < nplayers && pl[i].lives) ? 1 : 0;
     }
 }
@@ -554,11 +560,12 @@ static unsigned char platform_floor(int x) {
 static void update_player(unsigned char i) {
     Player *p = &pl[i];
     unsigned char pd = pad[i];
-    unsigned char ground, floor;
+    unsigned char ground, floor, was_moving;
     int old_y;
     if (p->state == 2) {
         if (--p->timer == 0) {
             if (p->lives) {
+                p->anim = p->landing = p->attack = p->moving = p->lie = 0;
                 p->state = 1; p->x = cam + 32; p->y = 40; p->vy = 0; p->inv = 100;
             } else p->state = 0;
         }
@@ -567,6 +574,8 @@ static void update_player(unsigned char i) {
     if (p->state == 0) return;
     if (p->inv) --p->inv;
     if (p->attack) --p->attack;
+    was_moving = p->moving;
+    if (p->landing) --p->landing;
     p->moving = 0;
     floor = platform_floor(p->x + 12);
     ground = (p->vy == 0 && (p->y == GROUND || p->y == floor));
@@ -597,8 +606,10 @@ static void update_player(unsigned char i) {
         floor = platform_floor(p->x + 12);
         /* A ledge overhead must not hide the ground beneath it. */
         if (old_y > floor) floor = GROUND;
-        if (p->vy >= 0 && old_y <= floor && p->y >= floor) { p->y = floor; p->vy = 0; }
+        if (p->vy >= 0 && old_y <= floor && p->y >= floor) { p->y = floor; p->vy = 0; p->landing = 6; }
     }
+    if (was_moving != p->moving) p->anim = 0;
+    else if (++p->anim >= (p->moving ? 16 : 48)) p->anim = 0;
     player_shoot(p, pressed[i] & BTN_B, pd & BTN_B);
 }
 
@@ -695,9 +706,9 @@ static void check_damage(void) {
     for (i = 0; i < 2; ++i) {
         Player *p = &pl[i];
         if (p->state != 1 || p->inv) continue;
-        /* Keep collisions inside the soldier silhouette. */
+        /* Exclude Chomp's splash tips; crouching compresses the body. */
         px = p->x + 4;
-        ph = p->lie ? 18 : 21;
+        ph = p->lie ? 12 : 18;
         py = p->y - ph;
         for (j = 0; j < MAX_EN; ++j)
             if (en_on[j] == 1 && overlap(px, py, 16, ph, en_x[j] + 7, GROUND - 24, 10, 24)) kill_player(p);
@@ -737,13 +748,14 @@ static void draw_all(void) {
         }
         if (p->state != 1 || (p->inv & 2)) continue;
         sx = p->x - cam;
-        if (p->lie) {
-            add_spr24(sx, p->y - 20, T_LIE, i, p->face);
-        } else {
-            if (p->moving) base = ((anim_timer >> 3) & 1) ? T_RUN : T_STAND;
-            else base = T_STAND;
-            add_spr24(sx, p->y - 24, base, i, p->face);
-        }
+        if (p->lie) base = T_LIE;
+        else if (p->attack) base = T_ATTACK;
+        else if (p->vy < 0) base = T_JUMP;
+        else if (p->y < GROUND && p->y != platform_floor(p->x + 12)) base = T_FALL;
+        else if (p->landing) base = T_RUN;
+        else if (p->moving) base = p->anim >= 8 ? T_RUN : T_STAND;
+        else base = p->anim >= 24 ? T_IDLE_BOB : T_STAND;
+        add_spr24(sx, p->y - 24, base, i, p->face);
     }
     for (i = 0; i < MAX_EN; ++i) {
         if (!en_on[i]) continue;
