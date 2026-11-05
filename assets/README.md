@@ -9,8 +9,8 @@ reads only these regions:
 
 | Position | Size | Sprite |
 | --- | --- | --- |
-| 0,0 through 71,23 | unused | player moved to independent Chomp sheet |
-| 72,0 / 96,0 | 24x24 each | alien standing / running |
+| 0,0 through 71,23 | unused | player moved to independent soldier sheet |
+| 72,0 / 96,0 | 24x24 each | enemy soldier standing / running |
 | 0,24 through 40,40 | 8x8 / 16x16 | projectiles, effects, arrow, package |
 | 48,24 | 40x40 | boss |
 
@@ -28,7 +28,7 @@ Use the same three opaque colours and grid as `sprites.png`:
 
 | Position | Size | Sprite |
 | --- | --- | --- |
-| 72,0 / 96,0 | 24x24 each | alien standing / running |
+| 72,0 / 96,0 | 24x24 each | enemy soldier standing / running |
 | 48,24 | 40x40 | Moon Warden saucer boss |
 
 Other areas of this sheet are unused. The build imports these regions into
@@ -38,26 +38,26 @@ the default lunar sheet; use it only when intentionally replacing hand edits.
 
 The floating 24x24 supply target is generated from the default package design
 in `tools/gen_chr.py`; the editable 16x16 package is used after it is shot.
-Alien palette slots render as black, grey, and white in both stages. Player
-shots use a compact 4x4 silhouette within their 8x8 tile.
+Enemy palette slots render as green uniform shadows, skin tone, and light
+highlights. Player shots use a compact 4x4 silhouette within their 8x8 tile.
 
-## Chomp player
+## Soldier player
 
-`sprites/player_chomp.png` is a 168x24 RGBA sheet of seven 24x24 poses.
-`sprites/player_chomp.json` records each frame's position, tile base, palette,
-and timing at 60 game updates per second. Its pixels use transparent, dark
-`#081828`, cyan `#00C0D8`, and white `#FFFFFF`; these map to NES transparency,
-black, cyan (blue for player two), and white. The build reads this sheet last
-so neither stage can replace the player artwork.
+`sprites/player_soldier.png` is a 168x24 RGBA sheet of seven 24x24 poses.
+`sprites/player_soldier.json` records each frame's position, tile base, palette,
+and timing at 60 game updates per second. It uses the same three opaque editor
+colours listed above. The build reads this sheet last so neither stage can
+replace the player artwork. Player palettes show blue or red uniforms, skin,
+and light highlights. Use native resolution and no antialiasing.
 
-The supplied issue logo was isolated from its connected pale background,
-resampled with nearest neighbour to 22x22, and reduced to three opaque colours.
-White highlights inside the logo were retained. Poses use nearest-neighbour
-squash/stretch, a one-pixel idle bob, and an enlarged bite. Keep the sheet at
-native resolution with no antialiasing. The crouch frame fills the bottom twelve
-rows; standing damage bounds exclude the splash tips (16x18, or 16x12 crouched).
-Landing reuses the squashed run pose for six updates. Shooting opens the bite
-while preserving existing projectile controls. Damage/death and respawn blink.
-Tile ranges 0C–1D and ED–FE are reserved for the additional Chomp poses; tile 00
+The poses show shaded helmets, human profiles, layered vests, rifles, and
+separate legs. Idle shifts down one pixel; running spreads the stride; jumping
+bends the knees; falling extends the legs; firing adds a muzzle flash. Landing
+uses the running pose for six updates. The prone frame occupies the bottom
+eight rows and uses an eight-pixel damage height; standing damage height is 21.
+Facing and damage blinking are preserved.
+
+Tile ranges 0C–1D and ED–FE are reserved for additional player poses; tile 00
 stays blank for title/background fills. The original player regions in
-`sprites.png` are unused and are no longer imported or exported.
+`sprites.png` remain unused. Both stage sheets contain human enemy commandos;
+the alien boss and lunar saucer remain the stage bosses.

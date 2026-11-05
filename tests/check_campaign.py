@@ -121,7 +121,7 @@ with tempfile.TemporaryDirectory() as directory:
     for start, count in ((0xB9, 25), (0xD9, 9), (0xE2, 9), (0xEB, 2)):
         assert any(data[start * 16:(start + count) * 16])
     assert data[0xA0 * 16:0xB9 * 16] != data[0xB9 * 16:0xD2 * 16]
-    metadata = json.loads((root / 'assets/sprites/player_chomp.json').read_text())
+    metadata = json.loads((root / 'assets/sprites/player_soldier.json').read_text())
     occupied = set()
     for pose in metadata['frames'].values():
         indices = set(range(pose['tile'], pose['tile'] + 9))
@@ -129,7 +129,20 @@ with tempfile.TemporaryDirectory() as directory:
         assert not indices & {0, 11, 37, 38, 42}
         occupied |= indices
         assert any(data[pose['tile'] * 16:(pose['tile'] + 9) * 16])
+    def pixel(base, x, y):
+        offset = (base + y // 8 * 3 + x // 8) * 16 + y % 8
+        bit = 7 - x % 8
+        return ((data[offset] >> bit) & 1) | (((data[offset + 8] >> bit) & 1) << 1)
+
+    # Helmet rim, skin, eye, and rifle distinguish the restored human art.
+    for base in (0x62, 0x7D, 0xD9):
+        assert pixel(base, 4, 4) == 3
+        assert pixel(base, 8, 6) == 2
+        assert pixel(base, 14, 6) == 1
+        assert pixel(base, 21, 12) == 1
+    assert all(pixel(0x74, x, y) == 0 for y in range(16) for x in range(24))
+    assert data[0x7D * 16:0x86 * 16] != data[0x86 * 16:0x8F * 16]
     assert not any(data[:16])  # title fill must remain blank
     assert len({data[p['tile'] * 16:(p['tile'] + 9) * 16]
                 for p in metadata['frames'].values()}) == 7
-print('Chomp animation, facing, collision, campaign, jump physics, supply targets, boss movement, audio, and CHR checks passed.')
+print('Soldier animation, facing, collision, campaign, jump physics, supply targets, boss movement, audio, and CHR checks passed.')
