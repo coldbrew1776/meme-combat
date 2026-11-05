@@ -142,6 +142,29 @@ with tempfile.TemporaryDirectory() as directory:
         assert pixel(base, 21, 12) == 1
     assert all(pixel(0x74, x, y) == 0 for y in range(16) for x in range(24))
     assert data[0x7D * 16:0x86 * 16] != data[0x86 * 16:0x8F * 16]
+    # Projectiles have transparent corners and symmetric rounded silhouettes.
+    for base, edge, center in ((11, 2, 3), (37, 1, 2)):
+        def shot(x, y):
+            offset = base * 16 + y
+            return ((data[offset] | data[offset + 8]) >> (7 - x)) & 1
+        assert not shot(edge, edge)
+        assert shot(center, edge) and shot(edge, center)
+        assert all(shot(x, y) == shot(7 - x, y) == shot(x, 7 - y)
+                   for y in range(8) for x in range(8))
+    # Verify the new editable target region survives conversion pixel for pixel.
+    import runpy
+    import sys
+    old_argv = sys.argv
+    sys.argv = ['gen_chr.py', str(path / 'source-check.bin')]
+    try:
+        converter = runpy.run_path(str(root / 'tools/gen_chr.py'))
+    finally:
+        sys.argv = old_argv
+    _, _, bpp, rows = converter['png_rows'](root / 'assets/sprites.png')
+    for y in range(24):
+        for x in range(24):
+            assert pixel(0x8F, x, y) == converter['sprite_value'](rows[40 + y], x, bpp)
+    assert any(data[0x8F * 16:0x98 * 16])
     assert not any(data[:16])  # title fill must remain blank
     assert len({data[p['tile'] * 16:(p['tile'] + 9) * 16]
                 for p in metadata['frames'].values()}) == 7
