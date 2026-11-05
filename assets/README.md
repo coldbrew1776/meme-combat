@@ -29,7 +29,7 @@ Use the same three opaque colours and grid as `sprites.png`:
 
 | Position | Size | Sprite |
 | --- | --- | --- |
-| 72,0 / 96,0 | 24x24 each | enemy soldier standing / running |
+| 72,0 / 96,0 | 24x24 each | lunar alien standing / running |
 | 48,24 | 40x40 | Moon Warden saucer boss |
 
 Other areas of this sheet are unused. The build imports these regions into
@@ -65,5 +65,6 @@ Facing and damage blinking are preserved.
 
 Tile ranges 0C–1D and ED–FE are reserved for additional player poses; tile 00
 stays blank for title/background fills. The original player regions in
-`sprites.png` remain unused. Both stage sheets contain human enemy commandos;
-the alien boss and lunar saucer remain the stage bosses.
+`sprites.png` remain unused. The Earth sheet contains human enemy commandos; the lunar sheet contains
+large-headed aliens with dark eyes and jointed limbs. Lunar palette slots
+render as black, silver, and white for both the aliens and saucer boss.

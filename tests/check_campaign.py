@@ -71,6 +71,12 @@ int main(void) {
     frame = 0; level_number = 2; sound_start(); sound_update();
     assert(APU_P1LO == (lunar_arp[0][0] & 255));
     assert(APU_TRILO == (lunar_bass[0] & 255));
+    level_number = 2;
+    nplayers = 1; start_level(); pl[0].inv = 2;
+    en_on[0] = 1; en_x[0] = 80;
+    oam_n = 0; draw_all(); assert(OAM[1] == T_ALIEN_B + 2);
+    level_number = 1;
+    oam_n = 0; draw_all(); assert(OAM[1] == T_ENEMY_B + 2);
     /* Player poses use game-update timers, independently of rendering. */
     level_number = 1; nplayers = 1; start_level();
     pl[0].inv = 0; pad[0] = pressed[0] = 0;
@@ -135,11 +141,18 @@ with tempfile.TemporaryDirectory() as directory:
         return ((data[offset] >> bit) & 1) | (((data[offset + 8] >> bit) & 1) << 1)
 
     # Helmet rim, skin, eye, and rifle distinguish the restored human art.
-    for base in (0x62, 0x7D, 0xD9):
+    for base in (0x62, 0x7D):
         assert pixel(base, 4, 4) == 3
         assert pixel(base, 8, 6) == 2
         assert pixel(base, 14, 6) == 1
         assert pixel(base, 21, 12) == 1
+    # Lunar enemies retain their own alien silhouette and animated legs.
+    assert pixel(0xD9, 8, 0) == 3
+    assert pixel(0xD9, 6, 4) == 1
+    assert pixel(0xD9, 12, 4) == 1
+    assert pixel(0xD9, 10, 9) == 1
+    assert data[0xD9 * 16:0xE2 * 16] != data[0x7D * 16:0x86 * 16]
+    assert data[0xD9 * 16:0xE2 * 16] != data[0xE2 * 16:0xEB * 16]
     assert all(pixel(0x74, x, y) == 0 for y in range(16) for x in range(24))
     assert data[0x7D * 16:0x86 * 16] != data[0x86 * 16:0x8F * 16]
     # Projectiles have transparent corners and symmetric rounded silhouettes.

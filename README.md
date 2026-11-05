@@ -7,7 +7,7 @@ human commandos run right, shoot enemies, grab power-ups (shoot the floating cap
 touch the dropped supply package: S = spread, R = rapid fire) and beat the boss, which has hit points.
 
 Defeating the first boss unlocks **Level 2: Lunar Outpost**, with cratered grey
-terrain, violet ridges, enemy commandos, and an eerie space music
+terrain, violet ridges, silver alien invaders, and an eerie space music
 loop. Its final boss, the **Moon Warden**, is an armoured flying saucer with
 40 hit points and faster blasts at alternating heights. Lives, weapons, player
 count, and score carry over; defeating it completes the campaign. A new game
@@ -31,8 +31,8 @@ when invoking make (for example, `make capture FCEUX=/usr/games/fceux`).
 The HUD displays score: each enemy is worth 100 points and the boss is worth
 1,000 points, both multiplied by the level number. Jump input is buffered for
 a few frames so it remains responsive while running over ledges or beneath
-one-way platforms. Both stages feature human enemy soldiers, compact player
-shots, and large floating supply targets that release labelled packages. Meme
+one-way platforms. Meme Zone features human enemy soldiers; Lunar Outpost has large-headed
+aliens with dark eyes and jointed limbs. Both stages have compact player shots, and large floating supply targets that release labelled packages. Meme
 Zone has dark grey ground with blue highlights. Its 40-pixel alien boss hovers
 vertically and fires red blasts. The game uses
 NES pulse channels for a looping background melody and weapon-fire effects;
@@ -46,8 +46,8 @@ poses, with frame positions and NES tile numbers in the adjacent JSON. Shaded
 helmets, faces, layered vests, rifles, and articulated legs restore the original
 human combatants with more natural proportions and detail within NES limits.
 The players retain idle, running, jumping, falling, landing, prone, and firing
-animations. Player one wears blue, player two red, and enemies green; all have
-skin-tone faces. Animation freezes while paused.
+animations. Player one wears blue, player two red, and Earth enemies green, with skin-tone faces. Lunar enemies and the Moon
+Warden use black, silver, and white. Animation freezes while paused.
 
 `assets/sprites.png` is the editable source for enemies, projectiles,
 and combat effects. It is a 128x64 transparent PNG arranged on an 8-pixel grid;

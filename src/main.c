@@ -192,6 +192,8 @@ static void load_palette(void) {
         else if (level_number == 2 && i == 7) PPUDATA = 0x23;
         else if (level_number == 2 && i == 10) PPUDATA = 0x10;
         else if (level_number == 2 && i == 11) PPUDATA = 0x30;
+        else if (level_number == 2 && i == 25) PPUDATA = 0x0F;
+        else if (level_number == 2 && i == 26) PPUDATA = 0x10;
         else PPUDATA = palette[i];
     }
 }
