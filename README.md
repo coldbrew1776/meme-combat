@@ -4,10 +4,10 @@ A Contra-style NES run-and-gun written in C (cc65). The opening screen shows the
 current version, **1.1.0** (maintained in `GAME_VERSION` in `src/main.c`).
 Level 1 is **Meme Zone**: one or two
 meme soldiers run right, shoot enemies, grab power-ups (shoot the floating capsule, then
-touch the dropped letter: S = spread, R = rapid fire) and beat the boss, which has hit points.
+touch the dropped supply package: S = spread, R = rapid fire) and beat the boss, which has hit points.
 
 Defeating the first boss unlocks **Level 2: Lunar Outpost**, with cratered grey
-terrain, violet ridges, green extraterrestrial enemies, and an eerie space music
+terrain, violet ridges, black-and-white extraterrestrial enemies, and an eerie space music
 loop. Its final boss, the **Moon Warden**, is an armoured flying saucer with
 40 hit points and faster blasts at alternating heights. Lives, weapons, player
 count, and score carry over; defeating it completes the campaign. A new game
@@ -30,9 +30,14 @@ when invoking make (for example, `make capture FCEUX=/usr/games/fceux`).
 
 The HUD displays score: each enemy is worth 100 points and the boss is worth
 1,000 points, both multiplied by the level number. Jump input is buffered for
-a few frames so it remains responsive while running over ledges. The game uses
+a few frames so it remains responsive while running over ledges or beneath
+one-way platforms. Both stages feature black-and-white aliens, compact player
+shots, and large floating supply targets that release labelled packages. Meme
+Zone has dark grey ground with blue highlights. Its 40-pixel alien boss hovers
+vertically and fires red blasts. The game uses
 NES pulse channels for a looping background melody and weapon-fire effects;
-the boss defeat sequence adds explosions and a victory fanfare.
+the boss defeat sequence adds explosions and a victory fanfare that continues
+through the stage-clear or mission-complete screen.
 
 ## Editing character sprites
 

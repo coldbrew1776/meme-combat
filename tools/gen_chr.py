@@ -119,8 +119,8 @@ PACKAGE = [
 ]
 # A compact circular shot leaves space between the action without reading as a
 # square block at NES resolution.
-BULLET = ["...33...", "..3333..", ".332233.", ".322223.", ".322223.", ".332233.",
-          "..3333..", "...33..."]
+BULLET = ["........", "........", "...33...", "..3223..", "..3223..", "...33...",
+          "........", "........"]
 BOSS_BULLET = ["........", ".222222.", ".233332.", ".233332.", ".233332.", ".233332.",
                ".222222.", "........"]
 EXPLOSION = ["...33...", ".3.33.3.", "..3223..", "33222233", "33222233", "..3223..",
@@ -229,6 +229,12 @@ def warden_art():
     return ["".join(str(v) for v in row) for row in g]
 
 
+# Both stages use oversized alien heads and dark eye sockets.
+blit(alien_art(False), T_ENEMY_A, 3)
+blit(alien_art(True), T_ENEMY_B, 3)
+# The floating target has a 24x24 silhouette; the released crate stays 16x16.
+blit(["".join(PACKAGE[y * 16 // 24][x * 16 // 24] for x in range(24))
+      for y in range(24)], 0x8F, 3)
 blit(alien_art(False), T_ALIEN_A, 3)
 blit(alien_art(True), T_ALIEN_B, 3)
 blit(warden_art(), T_LUNAR_BOSS, 5)

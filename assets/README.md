@@ -12,7 +12,7 @@ reads only these regions:
 | 0,0 | 24x24 | player standing |
 | 24,0 | 24x24 | player running |
 | 48,0 | 24x8 | player down |
-| 72,0 / 96,0 | 24x24 each | enemy standing / running |
+| 72,0 / 96,0 | 24x24 each | alien standing / running |
 | 0,24 through 40,40 | 8x8 / 16x16 | projectiles, effects, arrow, package |
 | 48,24 | 40x40 | boss |
 
@@ -37,3 +37,8 @@ Other areas of this sheet are unused. The build imports these regions into
 separate tiles, preserving Level 1 artwork. The lunar terrain remains generated
 in `tools/gen_chr.py`. The developer option `--export-lunar OUTPUT.png` recreates
 the default lunar sheet; use it only when intentionally replacing hand edits.
+
+The floating 24x24 supply target is generated from the default package design
+in `tools/gen_chr.py`; the editable 16x16 package is used after it is shot.
+Alien palette slots render as black, grey, and white in both stages. Player
+shots use a compact 4x4 silhouette within their 8x8 tile.

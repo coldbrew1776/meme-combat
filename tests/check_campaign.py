@@ -35,6 +35,36 @@ int main(void) {
     assert(!bb_on[0] && victory_sound);
     level_number = 1; score = 0; start_level();
     assert(pl[0].lives == 3 && pl[1].state == 1 && !pl[0].wpn);
+    /* Jump from the ground even when a one-way platform is overhead. */
+    pl[0].x = 150; pad[0] = pressed[0] = BTN_A;
+    update_player(0);
+    assert(pl[0].y < GROUND && pl[0].vy < 0);
+    pad[0] = pressed[0] = 0;
+    /* Falling below a platform must still land on the ground. */
+    pl[0].y = 185; pl[0].vy = 9;
+    update_player(0);
+    assert(pl[0].y == GROUND && pl[0].vy == 0);
+    /* A buffered jump just before landing fires on the next update. */
+    pl[0].y = 190; pl[0].vy = 4; pressed[0] = BTN_A;
+    update_player(0); pressed[0] = 0; update_player(0);
+    assert(pl[0].vy < 0 && pl[0].y < GROUND);
+    /* Grace after leaving a ledge; consumed jumps cannot double jump. */
+    pl[0].x = 194; pl[0].y = 160; pl[0].vy = 0;
+    pad[0] = BTN_RIGHT; update_player(0);
+    pressed[0] = BTN_A; update_player(0);
+    assert(pl[0].vy < 0 && !pl[0].coyote);
+    pl[0].vy = 2; update_player(0);
+    assert(pl[0].vy == 3);
+    /* The larger target accepts shots outside the dropped crate's bounds. */
+    cam = 600; boss_on = 0; pu_state[0] = 0; pu_y[0] = 132;
+    pb_on[0] = 1; pb_x[0] = pu_world_x[0] - 5; pb_y[0] = 132;
+    pb_dx[0] = pb_dy[0] = 0; update_bullets();
+    assert(pu_state[0] == 1 && !pb_on[0]);
+    boss_on = 1; boss_dying = 0; frame = 0; update_boss();
+    assert(boss_y == 143);
+    frame = 63; update_boss(); assert(boss_y == 112);
+    sound_boss_defeat(); sound_update();
+    assert(APU_NOISE && victory_sound == 179 && APU_P1 == 0x47);
     frame = 0; level_number = 2; sound_start(); sound_update();
     assert(APU_P1LO == (lunar_arp[0][0] & 255));
     assert(APU_TRILO == (lunar_bass[0] & 255));
@@ -53,4 +83,4 @@ with tempfile.TemporaryDirectory() as directory:
     for start, count in ((0xB9, 25), (0xD9, 9), (0xE2, 9), (0xEB, 2)):
         assert any(data[start * 16:(start + count) * 16])
     assert data[0xA0 * 16:0xB9 * 16] != data[0xB9 * 16:0xD2 * 16]
-print('Campaign state, lunar music, boss combat, and CHR checks passed.')
+print('Campaign, jump physics, supply targets, boss movement, audio, and CHR checks passed.')
