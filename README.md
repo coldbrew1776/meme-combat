@@ -18,11 +18,15 @@ title screen, and Start begins, pauses, or resumes a game.
 
 ## Build and run
 
-Requires `cc65`, `python3` and Mesen.
+Requires `cc65`, `python3` and FCEUX (with Lua support).
 
     make        # builds release/memeblitz.nes (including sprites from assets/sprites.png)
     make release # creates release/memeblitz.nes locally
-    make run    # launches it in Mesen
+    make run    # launches it in FCEUX
+    make capture # runs a scripted playtest and saves game-only PNGs in tmp/
+
+If FCEUX is outside your command search path, set `FCEUX` to its executable
+when invoking make (for example, `make capture FCEUX=/usr/games/fceux`).
 
 The HUD displays score: each enemy is worth 100 points and the boss is worth
 1,000 points, both multiplied by the level number. Jump input is buffered for
@@ -47,5 +51,14 @@ Level 2 enemies and the Moon Warden use `assets/lunar.png`, a separate editable
 
 `python3 tests/check_campaign.py` checks stage resets, carried progress, boss
 combat, lunar music selection, and generated graphics using a host C compiler.
-`make` verifies the cc65 ROM build. Emulator playtesting is still needed to assess
-visual timing, sound, and difficulty on NES hardware.
+`make` verifies the cc65 ROM build. `make capture` uses FCEUX's native Lua
+`gui.savescreenshotas` API to save the native NES image without window borders
+or desktop content (256x224 with FCEUX's default overscan crop). It captures
+the black title screen and blue logo, toggles
+player selection, starts Meme Zone, then moves, jumps, and fires. Captures and
+a completion report are saved in ignored `tmp/`; they must not be checked in.
+The capture directory must exist and `CAPDIR` must be an absolute path if
+running the Lua script directly; the make target handles both requirements.
+FCEUX 2.6.5 has been used to verify the title and scrolling gameplay. The
+scripted playtest mutes audio; sound and full campaign difficulty still need
+manual assessment.
