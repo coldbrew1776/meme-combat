@@ -36,6 +36,20 @@ int main(void) {
     update_bullets();
     assert(boss_hp == 0 && boss_dying == 90 && score == 3200);
     assert(!bb_on[0] && victory_sound);
+    /* Level 3 carries progress, supplies laser guns, and ends with its boss. */
+    level_number = 3; start_level();
+    assert(score == 3200 && pl[0].lives == 2 && pl[0].wpn == 1);
+    assert(boss_hp == 50 && !boss_on);
+    cam = 600; pl[0].inv = 0; pl[0].x = pu_world_x[0]; pl[0].y = GROUND;
+    pu_state[0] = 1; pu_y[0] = GROUND - 16;
+    check_damage(); assert(pl[0].wpn == 3 && pu_state[0] == 2);
+    pl[0].cool = 0; player_shoot(&pl[0], 0, BTN_B);
+    assert(pb_on[0] && pb_laser[0] && pb_dx[0] == 9);
+    boss_on = 1; boss_x = pb_x[0] + 9; boss_y = pb_y[0] - 12;
+    update_bullets(); assert(boss_hp == 48 && !pb_on[0]);
+    boss_hp = 1; pb_on[0] = pb_laser[0] = 1;
+    pb_x[0] = boss_x; pb_y[0] = boss_y + 12; pb_dx[0] = pb_dy[0] = 0;
+    update_bullets(); assert(!boss_hp && boss_dying == 90 && score == 6200);
     level_number = 1; score = 0; start_level();
     assert(pl[0].lives == 3 && pl[1].state == 1 && !pl[0].wpn);
     /* Jump from the ground even when a one-way platform is overhead. */
@@ -123,7 +137,11 @@ with tempfile.TemporaryDirectory() as directory:
     subprocess.run([str(path / 'campaign')], check=True)
     subprocess.run(['python3', str(root / 'tools/gen_chr.py'), str(path / 'chr.bin')], check=True)
     data = (path / 'chr.bin').read_bytes()
-    assert len(data) == 8192 and data[:4096] == data[4096:]
+    assert len(data) == 8192
+    for base, count in ((0x7D, 9), (0x86, 9), (0xA0, 25), (0x5D, 1)):
+        start, end = base * 16, (base + count) * 16
+        assert data[start:end] != data[4096 + start:4096 + end]
+    assert data[0x62 * 16:0x6B * 16] == data[4096 + 0x62 * 16:4096 + 0x6B * 16]
     for start, count in ((0xB9, 25), (0xD9, 9), (0xE2, 9), (0xEB, 2)):
         assert any(data[start * 16:(start + count) * 16])
     assert data[0xA0 * 16:0xB9 * 16] != data[0xB9 * 16:0xD2 * 16]

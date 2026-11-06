@@ -1,4 +1,4 @@
-/* Meme Blitz - a Contra style NES game (cc65). Two-stage campaign. */
+/* Meme Blitz - a Contra style NES game (cc65). Three-stage campaign. */
 #include <string.h>
 #define REG(a) (*(volatile unsigned char *)(a))
 #define PPUCTRL   REG(0x2000)
@@ -73,6 +73,7 @@
 #define T_ALIEN_B 0xE2
 #define T_REGOLITH 0xEB
 #define T_CRATER 0xEC
+#define T_LASER 0x5D
 
 #define GROUND 192          /* y of the players' feet */
 #define LEVEL_END 1800      /* camera stops here and the boss arrives */
@@ -91,7 +92,7 @@ typedef struct {
     unsigned char lives;
     unsigned char timer;    /* respawn delay */
     unsigned char inv;      /* invulnerability frames */
-    unsigned char wpn;      /* 0 normal, 1 spread, 2 rapid */
+    unsigned char wpn;      /* 0 normal, 1 spread, 2 rapid, 3 laser */
     unsigned char cool;
     unsigned char step;
     unsigned char moving;
@@ -109,7 +110,7 @@ static unsigned char frame, oam_n, rng = 0x5A, title_anim, freeze_frame;
 static unsigned char anim_timer;
 
 static int pb_x[MAX_PB]; static unsigned char pb_y[MAX_PB];
-static signed char pb_dx[MAX_PB], pb_dy[MAX_PB]; static unsigned char pb_on[MAX_PB];
+static signed char pb_dx[MAX_PB], pb_dy[MAX_PB]; static unsigned char pb_on[MAX_PB], pb_laser[MAX_PB];
 static int bb_x[MAX_BB]; static unsigned char bb_y[MAX_BB], bb_on[MAX_BB];
 static int en_x[MAX_EN]; static unsigned char en_on[MAX_EN], en_spd[MAX_EN];
 static unsigned char spawn_t;
@@ -194,6 +195,14 @@ static void load_palette(void) {
         else if (level_number == 2 && i == 11) PPUDATA = 0x30;
         else if (level_number == 2 && i == 25) PPUDATA = 0x0F;
         else if (level_number == 2 && i == 26) PPUDATA = 0x10;
+        else if (level_number == 3 && i == 1) PPUDATA = 0x0F;
+        else if (level_number == 3 && i == 5) PPUDATA = 0x06;
+        else if (level_number == 3 && i == 6) PPUDATA = 0x16;
+        else if (level_number == 3 && i == 7) PPUDATA = 0x27;
+        else if (level_number == 3 && i == 9) PPUDATA = 0x06;
+        else if (level_number == 3 && i == 10) PPUDATA = 0x16;
+        else if (level_number == 3 && i == 25) PPUDATA = 0x06;
+        else if (level_number == 3 && i == 26) PPUDATA = 0x16;
         else PPUDATA = palette[i];
     }
 }
@@ -202,7 +211,7 @@ static void screen_off(void) { PPUMASK = 0; }
 static void screen_on(void) {
     /* Both pattern tables are at $0000.  Set the scroll latch while the
        display is still off so the first visible frame is the finished one. */
-    PPUCTRL = 0; cam = 0;
+    PPUCTRL = level_number == 3 ? 0x18 : 0; cam = 0;
     ppu_addr(0x2000);
     PPUSCROLL = 0; PPUSCROLL = 0;
     PPUMASK = 0x1E;
@@ -229,7 +238,7 @@ static void present(void) {
     wait_vblank();
     OAMDMA = 2;
     if (title_anim) title_palette();
-    PPUCTRL = (cam >> 8) & 1;
+    PPUCTRL = ((cam >> 8) & 1) | (level_number == 3 ? 0x18 : 0);
     PPUSCROLL = cam & 0xFF;
     PPUSCROLL = 0;
     oam_n = 0;
@@ -462,16 +471,18 @@ static void build_level_bg(void) {
                 /* Cool slate ground with electric-blue seams replaces earth. */
                 h = level_number == 2 ? 2 + ((c * 5 + 3) % 6) : 4 + ((c * 3 + 5) % 9);
                 top = 22 - h;
-                if (row >= 25) PPUDATA = level_number == 2 ? T_REGOLITH : T_EARTH;
+                if (level_number == 3 && row < 4 + ((c * 5 + 3) % 4))
+                    PPUDATA = row == 3 + ((c * 5 + 3) % 4) ? T_MOUNTAIN_PEAK : T_MOUNTAIN;
+                else if (row >= 25) PPUDATA = level_number == 2 ? T_REGOLITH : T_EARTH;
                 else if (row == 24) PPUDATA = level_number == 2 ? T_CRATER : T_GRASS;
                 /* Solid ledges: three heights provide stepping stones. */
                 else if ((row == 20 && c >= 18 && c <= 25) ||
                          (row == 18 && c >= 38 && c <= 46) ||
                          (row == 21 && c >= 56 && c <= 62)) PPUDATA = T_PLATFORM;
                 /* A distant, cratered moon replaces the former clouds. */
-                else if (c >= 10 && c <= 11 && row >= 3 && row <= 4)
+                else if (level_number != 3 && c >= 10 && c <= 11 && row >= 3 && row <= 4)
                     PPUDATA = (row == 3) ? (c == 10 ? T_MOON_A : T_MOON_B) : (c == 10 ? T_MOON_C : T_MOON_D);
-                else if (c >= 45 && c <= 46 && row >= 5 && row <= 6)
+                else if (level_number != 3 && c >= 45 && c <= 46 && row >= 5 && row <= 6)
                     PPUDATA = (row == 5) ? (c == 45 ? T_MOON_A : T_MOON_B) : (c == 45 ? T_MOON_C : T_MOON_D);
                 /* Jagged slate ridges make the horizon read as lunar terrain. */
                 else if (row == top) PPUDATA = T_MOUNTAIN_PEAK;
@@ -497,7 +508,7 @@ static unsigned char overlap(int ax, int ay, int aw, int ah, int bx, int by, int
 static void start_level(void) {
     unsigned char i;
     cam = 0; frame = anim_timer = 0; spawn_t = 60;
-    boss_on = boss_dying = 0; boss_hp = level_number == 2 ? 40 : BOSS_HP; boss_flash = 0; boss_shot = 0; boss_y = 136;
+    boss_on = boss_dying = 0; boss_hp = level_number == 3 ? 50 : (level_number == 2 ? 40 : BOSS_HP); boss_flash = 0; boss_shot = 0; boss_y = 136;
     for (i = 0; i < MAX_PB; ++i) pb_on[i] = 0;
     for (i = 0; i < MAX_BB; ++i) bb_on[i] = 0;
     for (i = 0; i < MAX_EN; ++i) en_on[i] = 0;
@@ -516,7 +527,7 @@ static void fire_bullet(Player *p, signed char dx, signed char dy) {
     unsigned char i;
     for (i = 0; i < MAX_PB; ++i) {
         if (pb_on[i]) continue;
-        pb_on[i] = 1;
+        pb_on[i] = 1; pb_laser[i] = (p->wpn == 3);
         pb_x[i] = p->face ? p->x - 6 : p->x + 22;
         pb_y[i] = p->lie ? p->y - 6 : p->y - 15;
         pb_dx[i] = p->face ? -dx : dx;
@@ -532,6 +543,9 @@ static void player_shoot(Player *p, unsigned char btn_pressed, unsigned char btn
     if (p->wpn == 2) {
         if (!btn_held) return;
         fire_bullet(p, 6, 0); p->cool = 5; p->attack = 7;
+    } else if (p->wpn == 3) {
+        if (!btn_held) return;
+        fire_bullet(p, 9, 0); p->cool = 8; p->attack = 7;
     } else if (btn_pressed) {
         if (p->wpn == 1) {
             fire_bullet(p, 6, -2); fire_bullet(p, 6, 0); fire_bullet(p, 6, 2);
@@ -650,7 +664,10 @@ static void update_bullets(void) {
         if (!pb_on[i]) continue;
         if (boss_on && !boss_dying && overlap(pb_x[i] + 2, pb_y[i] + 2, 4, 4, boss_x + 2, boss_y + 2, 36, 38)) {
             pb_on[i] = 0; boss_flash = 4;
-            if (boss_hp) --boss_hp;
+            if (boss_hp) {
+                if (pb_laser[i] && boss_hp > 1) --boss_hp;
+                --boss_hp;
+            }
             if (!boss_hp) { score += 1000 * level_number; boss_dying = 90; sound_boss_defeat(); for (j = 0; j < MAX_BB; ++j) bb_on[j] = 0; }
         }
     }
@@ -686,18 +703,18 @@ static void update_boss(void) {
     if (boss_x > target) boss_x -= 2;
     else if (boss_x < target) boss_x += 1;
     boss_y = 112 + (((frame & 64) ? (frame & 63) : (63 - (frame & 63))) >> 1);
-    if (boss_x < cam + 250 && ++boss_shot >= (level_number == 2 ? 30 : 45)) {
+    if (boss_x < cam + 250 && ++boss_shot >= (level_number >= 2 ? 30 : 45)) {
         boss_shot = 0;
         for (i = 0; i < MAX_BB; ++i) {
             if (bb_on[i]) continue;
             bb_on[i] = 1; bb_x[i] = boss_x - 6;
-            bb_y[i] = boss_y + (level_number == 2 && (frame & 32) ? 38 : 22);                  /* red alien blast */
+            bb_y[i] = boss_y + (level_number >= 2 && (frame & 32) ? 38 : 22);                  /* red alien blast */
             break;
         }
     }
     for (i = 0; i < MAX_BB; ++i) {
         if (!bb_on[i]) continue;
-        bb_x[i] -= level_number == 2 ? 5 : 4;
+        bb_x[i] -= level_number >= 2 ? 5 : 4;
         if (bb_x[i] < cam - 8) bb_on[i] = 0;
     }
 }
@@ -719,7 +736,7 @@ static void check_damage(void) {
         if (boss_on && !boss_dying && overlap(px, py, 16, ph, boss_x + 4, boss_y + 3, 32, 36)) kill_player(p);
         for (j = 0; j < NUM_PU; ++j)
             if (pu_state[j] == 1 && overlap(px, py, 16, ph, pu_world_x[j], pu_y[j], 16, 16)) {
-                p->wpn = j + 1; pu_state[j] = 2;
+                p->wpn = level_number == 3 ? 3 : j + 1; pu_state[j] = 2;
             }
     }
 }
@@ -768,7 +785,7 @@ static void draw_all(void) {
             add_spr(sx + 8, GROUND - 16, T_EXPLOSION, 2);
     }
     for (i = 0; i < MAX_PB; ++i)
-        if (pb_on[i]) add_spr(pb_x[i] - cam, pb_y[i], T_BULLET, 3);
+        if (pb_on[i]) add_spr(pb_x[i] - cam, pb_y[i], pb_laser[i] ? T_LASER : T_BULLET, 3);
     for (i = 0; i < MAX_BB; ++i)
         if (bb_on[i]) add_spr(bb_x[i] - cam, bb_y[i], T_BOSS_BULLET, 3);
     for (i = 0; i < NUM_PU; ++i) {
@@ -776,7 +793,7 @@ static void draw_all(void) {
         if (pu_state[i] == 0 || pu_state[i] == 1) {
             if (pu_state[i] == 0) add_spr24(sx - 4, pu_y[i] - 4, T_TARGET, 0, 0);
             else add_spr16(sx, pu_y[i], T_CAPSULE, 0, 0);
-            if (pu_state[i] == 1) add_spr(sx + 5, pu_y[i] + 4, i ? 'R' : 'S', 3);
+            if (pu_state[i] == 1) add_spr(sx + 5, pu_y[i] + 4, level_number == 3 ? 'L' : (i ? 'R' : 'S'), 3);
         }
     }
     if (boss_on) {
@@ -827,8 +844,8 @@ static void pause_game(void) {
 /* returns 1 if the level was cleared, 0 on game over */
 static unsigned char play_level(void) {
     unsigned char i;
-    message_screen(level_number == 2 ? "LEVEL 2" : "LEVEL 1",
-                   level_number == 2 ? "LUNAR OUTPOST" : "MEME ZONE", 90);
+    message_screen(level_number == 3 ? "LEVEL 3" : (level_number == 2 ? "LEVEL 2" : "LEVEL 1"),
+                   level_number == 3 ? "CRYSTAL CAVERN" : (level_number == 2 ? "LUNAR OUTPOST" : "MEME ZONE"), 90);
     build_level_bg();
     start_level();
     sound_start();
@@ -870,7 +887,13 @@ void main(void) {
         }
         message_screen("STAGE CLEAR", "NEXT LUNAR OUTPOST", 180);
         level_number = 2;
-        if (play_level()) message_screen("MISSION COMPLETE", "MOON WARDEN DEFEATED", 180);
+        if (!play_level()) {
+            message_screen("GAME OVER", "TRY AGAIN", 150);
+            continue;
+        }
+        message_screen("STAGE CLEAR", "NEXT CRYSTAL CAVERN", 180);
+        level_number = 3;
+        if (play_level()) message_screen("MISSION COMPLETE", "CAVERN GUARDIAN DEFEATED", 180);
         else message_screen("GAME OVER", "TRY AGAIN", 150);
     }
 }
