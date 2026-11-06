@@ -1,0 +1,74 @@
+{
+  "size": [
+    168,
+    24
+  ],
+  "frame_size": [
+    24,
+    24
+  ],
+  "palette": [
+    [
+      24,
+      38,
+      89,
+      255
+    ],
+    [
+      42,
+      122,
+      201,
+      255
+    ],
+    [
+      255,
+      211,
+      94,
+      255
+    ]
+  ],
+  "frames": {
+    "idle": {
+      "x": 0,
+      "y": 0,
+      "tile": 98
+    },
+    "run": {
+      "x": 24,
+      "y": 0,
+      "tile": 107
+    },
+    "crouch": {
+      "x": 48,
+      "y": 0,
+      "tile": 116
+    },
+    "idle_bob": {
+      "x": 72,
+      "y": 0,
+      "tile": 12
+    },
+    "jump": {
+      "x": 96,
+      "y": 0,
+      "tile": 21
+    },
+    "fall": {
+      "x": 120,
+      "y": 0,
+      "tile": 237
+    },
+    "attack": {
+      "x": 144,
+      "y": 0,
+      "tile": 246
+    }
+  },
+  "timing": {
+    "idle_ticks": 24,
+    "run_ticks": 8,
+    "attack_ticks": 9,
+    "landing_ticks": 6
+  },
+  "ticks_per_second": 60
+}
