@@ -9,8 +9,11 @@ touch the dropped supply package: S = spread, R = rapid fire) and beat the boss,
 Defeating the first boss unlocks **Level 2: Lunar Outpost**, with cratered grey
 terrain, violet ridges, silver alien invaders, and an eerie space music
 loop. Its final boss, the **Moon Warden**, is an armoured flying saucer with
-40 hit points and faster blasts at alternating heights. Lives, weapons, player
-count, and score carry over; defeating it completes the campaign. A new game
+40 hit points and faster blasts at alternating heights. Defeating it opens
+**Level 3: Crystal Cavern**, a rocky cave inhabited by horned cave dwellers and
+the 50-hit-point Cavern Guardian. Shoot either supply target and collect its
+L package for a fast laser that deals double damage to bosses. Lives, weapons,
+player count, and score carry over; defeating the guardian completes the campaign. A new game
 resets both players and starts again at Level 1.
 
 Controls: D-pad move (down = lie down), A jump, B shoot, Select toggles 1/2 players on the
@@ -32,7 +35,7 @@ The HUD displays score: each enemy is worth 100 points and the boss is worth
 1,000 points, both multiplied by the level number. Jump input is buffered for
 a few frames so it remains responsive while running over ledges or beneath
 one-way platforms. Meme Zone features human enemy soldiers; Lunar Outpost has large-headed
-aliens with dark eyes and jointed limbs. Both stages have compact player shots, and large floating supply targets that release labelled packages. Meme
+aliens with dark eyes and jointed limbs. All three stages have large floating supply targets that release labelled packages. Meme
 Zone has dark grey ground with blue highlights. Its 40-pixel alien boss hovers
 vertically and fires red blasts. The game uses
 NES pulse channels for a looping background melody and weapon-fire effects;
@@ -58,12 +61,13 @@ editors and the build uses only Python's standard library. The completed ROM is
 written to `release/memeblitz.nes`.
 
 Level 2 enemies and the Moon Warden use `assets/lunar.png`, a separate editable
-128x64 sheet with the same palette. Both sheets are required by the build.
+128x64 sheet with the same palette. Both sheets are required by the build. The cave creatures and guardian are drawn
+in the graphics generator and occupy a separate pattern table.
 
 ## Validation
 
 `python3 tests/check_campaign.py` checks stage resets, carried progress, boss
-combat, lunar music selection, and generated graphics using a host C compiler.
+combat, lunar music selection, cave progression and laser combat, and generated graphics using a host C compiler.
 `make` verifies the cc65 ROM build. `make capture` uses FCEUX's native Lua
 `gui.savescreenshotas` API to save the native NES image without window borders
 or desktop content (256x224 with FCEUX's default overscan crop). It captures

@@ -2,8 +2,8 @@
 """Generate the NES CHR (graphics) bank for Meme Blitz.
 
 Usage: gen_chr.py OUTPUT.chr
-The same 4K tile set is written to both pattern tables (sprites and
-background), so tile numbers mean the same thing everywhere.
+The second 4K table replaces selected tiles for the cave stage; both
+background and sprites select that table together.
 """
 import json
 import os
@@ -473,5 +473,48 @@ import_sprite_sheet(os.path.join(os.path.dirname(SPRITE_SHEET), "lunar.png"), lu
 import_player()
 for i, t in tiles.items():
     bank[i * 16:i * 16 + 16] = encode(t)
+# The cave table reuses the shared font and player poses, but replaces the
+# Earth enemy and boss slots with horned cave dwellers and their guardian.
+cave_bank = bytearray(bank)
+def cave_enemy(run):
+    g = canvas(24, 24)
+    rect(g, 5, 5, 18, 14, 2)
+    rect(g, 7, 3, 16, 5, 1)
+    for x in (5, 17):
+        rect(g, x, 1, x + 1, 5, 3)  # horns
+    rect(g, 7, 7, 9, 9, 3)
+    rect(g, 14, 7, 16, 9, 3)
+    rect(g, 9, 12, 14, 13, 1)
+    rect(g, 3, 13, 6, 18, 1)
+    rect(g, 17, 13, 20, 18, 1)
+    for x in ((5, 15) if run else (7, 13)):
+        rect(g, x, 15, x + 3, 22, 2)
+        rect(g, x - 1, 22, x + 4, 23, 3)
+    return ["".join(str(v) for v in row) for row in g]
+
+def cave_guardian():
+    g = canvas(40, 40)
+    for y in range(5, 34):
+        for x in range(4, 36):
+            if abs(x - 20) + abs(y - 20) < 22:
+                g[y][x] = 2 if (x + y) % 7 else 3
+    for x in (7, 29):
+        rect(g, x, 1, x + 3, 10, 3)
+    rect(g, 8, 13, 31, 18, 1)
+    rect(g, 11, 15, 15, 17, 3)
+    rect(g, 24, 15, 28, 17, 3)
+    rect(g, 12, 24, 28, 28, 1)
+    for x in (13, 18, 23):
+        rect(g, x, 24, x + 2, 26, 3)
+    return ["".join(str(v) for v in row) for row in g]
+
+blit(cave_enemy(False), T_ENEMY_A, 3)
+blit(cave_enemy(True), T_ENEMY_B, 3)
+blit(cave_guardian(), T_BOSS, 5)
+blit(["........", "........", "33333333", "22222222",
+      "33333333", "........", "........", "........"], 0x5D, 1)
+for base, count in ((T_ENEMY_A, 9), (T_ENEMY_B, 9), (T_BOSS, 25), (0x5D, 1)):
+    for i in range(base, base + count):
+        cave_bank[i * 16:i * 16 + 16] = encode(tiles[i])
 with open(sys.argv[1], "wb") as f:
-    f.write(bytes(bank) * 2)
+    f.write(bank + cave_bank)
