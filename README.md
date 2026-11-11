@@ -31,6 +31,48 @@ Requires `cc65`, `python3` and FCEUX (with Lua support).
 If FCEUX is outside your command search path, set `FCEUX` to its executable
 when invoking make (for example, `make capture FCEUX=/usr/games/fceux`).
 
+## Testing on Windows
+
+Windows does not ship with `make`, `cc65`, a C compiler, or a `python3` command,
+so set these up once before building. The steps below use Git Bash, which
+comes with Git for Windows and runs the Makefile's shell commands correctly.
+
+1. **Install Git for Windows** from https://git-scm.com and open **Git Bash**.
+   Run all the following commands from Git Bash inside the project folder.
+2. **Install Python 3** from https://www.python.org/downloads/ (tick "Add python.exe
+   to PATH"). The build calls `python3`, which Windows does not provide by
+   default. Check it with `python3 --version`. If that reports "command not
+   found" or opens the Microsoft Store, create a `python3` command by running
+   `cp "$(which python)" /usr/bin/python3` in Git Bash, then check again.
+3. **Install make and a C compiler for the tests.** In Git Bash, run
+   `pacman -S make` if `make` is missing, and install MinGW-w64 GCC (for
+   example from https://www.msys2.org, then `pacman -S mingw-w64-ucrt-x86_64-gcc`,
+   and add its `bin` folder to your PATH). The validation script runs a
+   command named `cc`; if your compiler is only called `gcc`, create `cc` the
+   same way as `python3` in step 2.
+4. **Install cc65** from https://cc65.github.io/getting-started.html (download the
+   Windows snapshot zip), extract it to a folder such as `C:\cc65`, and add its
+   `bin` folder to your Windows PATH. Restart Git Bash, then check that
+   `cl65 --version` prints a version.
+5. **Install FCEUX** from https://fceux.com (Windows build, 2.6.5 or later, with
+   Lua support). Note where `fceux.exe` is. If it is not on your PATH, pass it
+   to make, for example:
+   `make run FCEUX="/c/Program\ Files\ (x86)/FCEUX/fceux.exe"`.
+   The `capture` target also works this way.
+
+Then build and test from Git Bash:
+
+    make                          # builds release/memeblitz.nes
+    make run FCEUX="<path to fceux.exe>"
+    make capture FCEUX="<path to fceux.exe>"
+    python3 tests/check_campaign.py
+
+To confirm the Windows build works, check that `release/memeblitz.nes` exists
+after `make`, that `make run` opens FCEUX on the title screen, and that
+`python3 tests/check_campaign.py` finishes without errors. Use `make clean` to
+remove the generated files. Generated output (`build/`, `release/`, `tmp/`) is
+ignored by git and must not be committed.
+
 The HUD displays score: each enemy is worth 100 points and the boss is worth
 1,000 points, both multiplied by the level number. Jump input is buffered for
 a few frames so it remains responsive while running over ledges or beneath
